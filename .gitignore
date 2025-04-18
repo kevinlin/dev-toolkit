@@ -29,6 +29,7 @@ ENV/
 .uv/
 
 # IDE
+.history/
 .idea/
 .vscode/
 *.swp
