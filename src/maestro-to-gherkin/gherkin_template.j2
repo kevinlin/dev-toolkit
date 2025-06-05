@@ -1,0 +1,20 @@
+Feature: {{ feature_name }}
+Scenario: {{ scenario_name }}
+  {% if appId %}
+  Launch Application with appId: {{ appId }}
+  {% endif %}
+  {% for step in flow -%}
+    {%- if step['launchApp'] -%}
+    Given the app is launched with clear state
+    {% elif step['tapOn'] -%}
+    When the user taps on "{{ step['tapOn'] }}"
+    {% elif step['inputText'] -%}
+    And the user enters "{{ step['inputText'] }}" in the input field
+    {% elif step['pressKey'] -%}
+    And the user presses "{{ step['pressKey'] }}"
+    {% elif step['assertVisible'] -%}
+    Then the element "{{ step['assertVisible'] }}" should be visible
+    {% elif step['takeScreenshot'] -%}
+    Then take a screenshot named "{{ step['takeScreenshot'] }}"
+    {%- endif -%}
+  {% endfor %}

@@ -48,4 +48,11 @@ htmlcov/
 
 # Logs
 *.log
-logs/ 
+logs/
+
+# Input/output files
+input/
+output/
+
+# Cursor IDE
+.history/
