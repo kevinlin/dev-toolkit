@@ -321,7 +321,7 @@ class TestCacheIntegration(unittest.TestCase):
         
         # Verify cache error was logged
         print_calls = [str(call) for call in mock_print.call_args_list]
-        self.assertTrue(any('Warning: Failed to save cache after error' in call for call in print_calls))
+        self.assertTrue(any('Warning: Failed to save cache' in call for call in print_calls))
     
     def test_large_batch_caching_performance(self):
         """Test cache performance with large batches"""

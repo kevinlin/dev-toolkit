@@ -50,7 +50,7 @@ class ProviderConfig:
 
 @dataclass
 class ProcessingStats:
-    """Statistics for email processing"""
+    """Statistics for email processing with enhanced error tracking and timing"""
     total_fetched: int = 0
     skipped_short: int = 0
     skipped_duplicate: int = 0
@@ -58,15 +58,98 @@ class ProcessingStats:
     retained: int = 0
     errors: int = 0
     
+    # Enhanced error categorization
+    fetch_errors: int = 0
+    timeout_errors: int = 0
+    processing_errors: int = 0
+    cache_errors: int = 0
+    output_errors: int = 0
+    
+    # Timing information
+    start_time: Optional[datetime.datetime] = None
+    end_time: Optional[datetime.datetime] = None
+    
+    def start_processing(self) -> None:
+        """Mark the start of processing"""
+        self.start_time = datetime.datetime.now()
+    
+    def end_processing(self) -> None:
+        """Mark the end of processing"""
+        self.end_time = datetime.datetime.now()
+    
+    def get_processing_duration(self) -> Optional[str]:
+        """Get formatted processing duration"""
+        if self.start_time and self.end_time:
+            duration = self.end_time - self.start_time
+            total_seconds = int(duration.total_seconds())
+            hours, remainder = divmod(total_seconds, 3600)
+            minutes, seconds = divmod(remainder, 60)
+            
+            if hours > 0:
+                return f"{hours}h {minutes}m {seconds}s"
+            elif minutes > 0:
+                return f"{minutes}m {seconds}s"
+            else:
+                return f"{seconds}s"
+        return None
+    
+    def increment_error_type(self, error_type: str) -> None:
+        """Increment specific error type and total errors"""
+        self.errors += 1
+        
+        if error_type == 'fetch':
+            self.fetch_errors += 1
+        elif error_type == 'timeout':
+            self.timeout_errors += 1
+        elif error_type == 'processing':
+            self.processing_errors += 1
+        elif error_type == 'cache':
+            self.cache_errors += 1
+        elif error_type == 'output':
+            self.output_errors += 1
+    
     def get_summary(self) -> str:
-        """Get a formatted summary of processing statistics"""
-        return (f"Processing Summary:\n"
-                f"  Total fetched: {self.total_fetched}\n"
-                f"  Skipped (short): {self.skipped_short}\n"
-                f"  Skipped (duplicate): {self.skipped_duplicate}\n"
-                f"  Skipped (system): {self.skipped_system}\n"
-                f"  Retained: {self.retained}\n"
-                f"  Errors: {self.errors}")
+        """Get a comprehensive formatted summary of processing statistics"""
+        duration_str = self.get_processing_duration()
+        duration_line = f"\n  Processing time: {duration_str}" if duration_str else ""
+        
+        summary = (f"Processing Summary:\n"
+                  f"  Total fetched: {self.total_fetched}\n"
+                  f"  Skipped (short): {self.skipped_short}\n"
+                  f"  Skipped (duplicate): {self.skipped_duplicate}\n"
+                  f"  Skipped (system): {self.skipped_system}\n"
+                  f"  Retained: {self.retained}\n"
+                  f"  Total errors: {self.errors}{duration_line}")
+        
+        # Add detailed error breakdown if there are errors
+        if self.errors > 0:
+            error_details = []
+            if self.fetch_errors > 0:
+                error_details.append(f"fetch: {self.fetch_errors}")
+            if self.timeout_errors > 0:
+                error_details.append(f"timeout: {self.timeout_errors}")
+            if self.processing_errors > 0:
+                error_details.append(f"processing: {self.processing_errors}")
+            if self.cache_errors > 0:
+                error_details.append(f"cache: {self.cache_errors}")
+            if self.output_errors > 0:
+                error_details.append(f"output: {self.output_errors}")
+            
+            if error_details:
+                summary += f"\n  Error breakdown: {', '.join(error_details)}"
+        
+        # Add processing efficiency metrics
+        if self.total_fetched > 0:
+            retention_rate = (self.retained / self.total_fetched) * 100
+            error_rate = (self.errors / self.total_fetched) * 100
+            summary += f"\n  Retention rate: {retention_rate:.1f}%"
+            summary += f"\n  Error rate: {error_rate:.1f}%"
+        
+        return summary
+    
+    def get_quick_stats(self) -> str:
+        """Get a quick one-line summary for progress logging"""
+        return f"processed: {self.total_fetched}, retained: {self.retained}, errors: {self.errors}"
 
 
 class EmailExporterConfig:
@@ -150,6 +233,7 @@ class IMAPConnectionManager:
         self.connection: Optional[imaplib.IMAP4_SSL] = None
         self.max_retries = 3
         self.is_connected = False
+        self.fetch_timeout = 60  # Add timeout for fetch operations (60 seconds)
     
     def connect(self) -> bool:
         """
@@ -162,8 +246,10 @@ class IMAPConnectionManager:
             try:
                 print(f"Attempting IMAP connection to {self.config.imap_server}:{self.config.port} (attempt {attempt + 1}/{self.max_retries})")
                 
-                # Create SSL IMAP connection
+                # Create SSL IMAP connection with timeout
                 self.connection = imaplib.IMAP4_SSL(self.config.imap_server, self.config.port)
+                # Set socket timeout for all operations
+                self.connection.sock.settimeout(self.fetch_timeout)
                 
                 # Authenticate with app password
                 self.connection.login(self.config.email_address, self.config.app_password)
@@ -358,42 +444,56 @@ class IMAPConnectionManager:
             print("Error: Not connected to IMAP server")
             return
         
-        try:
-            # Search for all messages in the selected folder using UID search
-            print("Searching for all messages in sent folder...")
-            status, data = self.connection.uid('search', None, 'ALL')
-            
-            if status != 'OK':
-                print(f"Error: Failed to search messages: {data}")
-                return
-            
-            # Parse UIDs from search results
-            if not data or not data[0]:
-                print("No messages found in sent folder")
-                return
-            
-            # Split the UID string into individual UIDs
-            all_uids = data[0].decode('utf-8').split()
-            total_messages = len(all_uids)
-            
-            print(f"Found {total_messages} messages in sent folder")
-            
-            # Yield UIDs in batches
-            for i in range(0, total_messages, batch_size):
-                batch_uids = all_uids[i:i + batch_size]
-                batch_num = (i // batch_size) + 1
-                total_batches = (total_messages + batch_size - 1) // batch_size
+        max_search_retries = 2  # Retry search operation once on timeout
+        
+        for search_attempt in range(max_search_retries):
+            try:
+                # Search for all messages in the selected folder using UID search
+                print("Searching for all messages in sent folder...")
+                status, data = self.connection.uid('search', None, 'ALL')
                 
-                print(f"Processing batch {batch_num}/{total_batches} ({len(batch_uids)} messages)")
-                yield batch_uids
+                if status != 'OK':
+                    print(f"Error: Failed to search messages: {data}")
+                    return
                 
-        except Exception as e:
-            print(f"Error fetching message UIDs: {str(e)}")
-            return
+                # Parse UIDs from search results
+                if not data or not data[0]:
+                    print("No messages found in sent folder")
+                    return
+                
+                # Split the UID string into individual UIDs
+                all_uids = data[0].decode('utf-8').split()
+                total_messages = len(all_uids)
+                
+                print(f"Found {total_messages} messages in sent folder")
+                
+                # Yield UIDs in batches
+                for i in range(0, total_messages, batch_size):
+                    batch_uids = all_uids[i:i + batch_size]
+                    batch_num = (i // batch_size) + 1
+                    total_batches = (total_messages + batch_size - 1) // batch_size
+                    
+                    print(f"Processing batch {batch_num}/{total_batches} ({len(batch_uids)} messages)")
+                    yield batch_uids
+                
+                return  # Success, exit retry loop
+                
+            except (imaplib.IMAP4.error, OSError, TimeoutError) as e:
+                error_msg = f"Error fetching message UIDs: {str(e)}"
+                if search_attempt == max_search_retries - 1:
+                    print(f"Error: {error_msg} - maximum retries exceeded")
+                    return
+                else:
+                    print(f"Warning: {error_msg} - retrying search operation...")
+                    time.sleep(2)  # Wait 2 seconds before retry
+                    continue
+            except Exception as e:
+                print(f"Error fetching message UIDs: {str(e)}")
+                return
     
     def fetch_message(self, uid: str) -> Optional[email.message.Message]:
         """
-        Fetch a single email message by UID.
+        Fetch a single email message by UID with timeout handling and retry logic.
         
         Args:
             uid: Message UID to fetch
@@ -402,37 +502,56 @@ class IMAPConnectionManager:
             email.message.Message: Parsed email message or None if error
         """
         if not self.is_connected or not self.connection:
-            print("Error: Not connected to IMAP server")
+            print(f"Error: Not connected to IMAP server for UID {uid}")
             return None
         
-        try:
-            # Fetch message by UID
-            status, data = self.connection.uid('fetch', uid, '(RFC822)')
-            
-            if status != 'OK':
-                print(f"Warning: Failed to fetch message UID {uid}: {data}")
-                return None
-            
-            if not data or not data[0]:
-                print(f"Warning: No data returned for message UID {uid}")
-                return None
-            
-            # Parse the raw email message
-            raw_email = data[0][1]
-            if raw_email is None:
-                print(f"Warning: No email data returned for UID {uid}")
-                return None
+        max_fetch_retries = 2  # Retry individual fetch once on timeout
+        
+        for fetch_attempt in range(max_fetch_retries):
+            try:
+                # Fetch message by UID
+                status, data = self.connection.uid('fetch', uid, '(RFC822)')
                 
-            if isinstance(raw_email, bytes):
-                message = email.message_from_bytes(raw_email)
-            else:
-                message = email.message_from_string(str(raw_email))
-            
-            return message
-            
-        except Exception as e:
-            print(f"Error fetching message UID {uid}: {str(e)}")
-            return None
+                if status != 'OK':
+                    if fetch_attempt == max_fetch_retries - 1:
+                        print(f"Warning: Failed to fetch message UID {uid}: {data}")
+                    else:
+                        print(f"Warning: Failed to fetch message UID {uid}: {data} - retrying...")
+                        time.sleep(1)
+                        continue
+                    return None
+                
+                if not data or not data[0]:
+                    print(f"Warning: No data returned for message UID {uid}")
+                    return None
+                
+                # Parse the raw email message
+                raw_email = data[0][1]
+                if raw_email is None:
+                    print(f"Warning: No email data returned for UID {uid}")
+                    return None
+                    
+                if isinstance(raw_email, bytes):
+                    message = email.message_from_bytes(raw_email)
+                else:
+                    message = email.message_from_string(str(raw_email))
+                
+                return message
+                
+            except (imaplib.IMAP4.error, OSError, TimeoutError) as e:
+                error_msg = f"Timeout/connection error fetching message UID {uid}: {str(e)}"
+                if fetch_attempt == max_fetch_retries - 1:
+                    print(f"Error: {error_msg} - maximum retries exceeded")
+                    return None
+                else:
+                    print(f"Warning: {error_msg} - retrying fetch...")
+                    time.sleep(1)
+                    continue
+            except Exception as e:
+                print(f"Error fetching message UID {uid}: {str(e)}")
+                return None
+        
+        return None
 
 
 class ContentProcessor:
@@ -1622,32 +1741,64 @@ class EmailProcessor:
             ProcessingStats: Final processing statistics
         """
         print("Starting email processing...")
+        self.stats.start_processing()
         
         # Load existing cache if cache manager is available
         if self.cache_manager:
-            self.cache_manager.load_cache()
-            cache_stats = self.cache_manager.get_cache_stats()
-            print(f"Cache loaded: {cache_stats['total_cached_uids']} previously processed UIDs, {cache_stats['total_cached_content_hashes']} content hashes")
+            try:
+                self.cache_manager.load_cache()
+                cache_stats = self.cache_manager.get_cache_stats()
+                print(f"Cache loaded: {cache_stats['total_cached_uids']} previously processed UIDs, {cache_stats['total_cached_content_hashes']} content hashes")
+            except Exception as e:
+                print(f"Warning: Failed to load cache: {str(e)}")
+                self.stats.increment_error_type('cache')
         
         # Create output file if output writer is available
         if self.output_writer:
-            self.output_writer.create_output_file()
+            try:
+                self.output_writer.create_output_file()
+            except Exception as e:
+                print(f"Error: Failed to create output file: {str(e)}")
+                self.stats.increment_error_type('output')
+                self.stats.end_processing()
+                return self.stats
         
         try:
-            # Process emails in batches
+            # Process emails in batches with enhanced error handling
+            batch_count = 0
             for batch_uids in self.imap_manager.fetch_message_uids(batch_size):
-                self._process_batch(batch_uids, progress_interval)
+                batch_count += 1
+                print(f"Starting batch {batch_count} processing...")
+                
+                try:
+                    self._process_batch(batch_uids, progress_interval)
+                    print(f"Completed batch {batch_count} - {self.stats.get_quick_stats()}")
+                except Exception as e:
+                    print(f"Error: Failed to process batch {batch_count}: {str(e)}")
+                    self.stats.increment_error_type('processing')
+                    # Continue with next batch instead of failing completely
+                    continue
             
             # Finalize output file if output writer is available
             if self.output_writer:
-                self.output_writer.finalize_output()
+                try:
+                    self.output_writer.finalize_output()
+                    print(f"Output file successfully written: {self.output_writer.get_output_filename()}")
+                except Exception as e:
+                    print(f"Warning: Failed to finalize output file: {str(e)}")
+                    self.stats.increment_error_type('output')
             
             # Save cache after processing if cache manager is available
             if self.cache_manager:
-                self.cache_manager.save_cache()
-                print("Cache updated and saved successfully")
+                try:
+                    self.cache_manager.save_cache()
+                    print("Cache updated and saved successfully")
+                except Exception as e:
+                    print(f"Warning: Failed to save cache: {str(e)}")
+                    self.stats.increment_error_type('cache')
             
-            # Final summary
+            # Mark end of processing and show final summary
+            self.stats.end_processing()
             print("\nEmail processing completed!")
             print(self.stats.get_summary())
             
@@ -1657,8 +1808,9 @@ class EmailProcessor:
             return self.stats
             
         except Exception as e:
-            print(f"Error during email processing: {str(e)}")
-            self.stats.errors += 1
+            print(f"Error: Critical failure during email processing: {str(e)}")
+            self.stats.increment_error_type('processing')
+            self.stats.end_processing()
             
             # Finalize output file even if there was an error
             if self.output_writer:
@@ -1667,6 +1819,7 @@ class EmailProcessor:
                     print("Output file finalized despite processing error")
                 except Exception as output_error:
                     print(f"Warning: Failed to finalize output file after error: {str(output_error)}")
+                    self.stats.increment_error_type('output')
             
             # Try to save cache even if there was an error
             if self.cache_manager:
@@ -1675,17 +1828,20 @@ class EmailProcessor:
                     print("Cache saved despite processing error")
                 except Exception as cache_error:
                     print(f"Warning: Failed to save cache after error: {str(cache_error)}")
+                    self.stats.increment_error_type('cache')
             
             return self.stats
     
     def _process_batch(self, uids: List[str], progress_interval: int) -> None:
         """
-        Process a batch of message UIDs sequentially.
+        Process a batch of message UIDs sequentially with enhanced error handling.
         
         Args:
             uids: List of message UIDs to process
             progress_interval: Log progress every N processed emails
         """
+        batch_start_time = datetime.datetime.now()
+        
         for uid in uids:
             try:
                 # Check if message is already processed using cache
@@ -1693,31 +1849,46 @@ class EmailProcessor:
                     self.stats.skipped_duplicate += 1
                     continue
                 
-                # Fetch individual message
-                message = self.imap_manager.fetch_message(uid)
+                # Fetch individual message with timeout handling
+                try:
+                    message = self.imap_manager.fetch_message(uid)
+                except (TimeoutError, OSError) as e:
+                    print(f"Warning: Timeout/connection error for UID {uid}: {str(e)}")
+                    self.stats.increment_error_type('timeout')
+                    continue
+                except Exception as e:
+                    print(f"Warning: Fetch error for UID {uid}: {str(e)}")
+                    self.stats.increment_error_type('fetch')
+                    continue
                 
                 if message is None:
-                    self.stats.errors += 1
+                    self.stats.increment_error_type('fetch')
                     continue
                 
                 # Process the message and check if it was retained
-                was_retained = self._process_single_message(uid, message)
-                
-                # Only mark message as processed in cache if it was actually retained
-                if self.cache_manager and was_retained:
-                    self.cache_manager.mark_processed(uid)
+                try:
+                    was_retained = self._process_single_message(uid, message)
+                    
+                    # Only mark message as processed in cache if it was actually retained
+                    if self.cache_manager and was_retained:
+                        self.cache_manager.mark_processed(uid)
+                except Exception as e:
+                    print(f"Warning: Processing error for UID {uid}: {str(e)}")
+                    self.stats.increment_error_type('processing')
+                    continue
                 
                 # Update total count
                 self.stats.total_fetched += 1
                 
-                # Log progress at specified intervals
+                # Enhanced progress logging at specified intervals
                 if self.stats.total_fetched % progress_interval == 0:
-                    print(f"Progress: Processed {self.stats.total_fetched} emails "
-                          f"(retained: {self.stats.retained}, errors: {self.stats.errors})")
+                    batch_duration = datetime.datetime.now() - batch_start_time
+                    rate = progress_interval / batch_duration.total_seconds() if batch_duration.total_seconds() > 0 else 0
+                    print(f"Progress: {self.stats.get_quick_stats()} (processing rate: {rate:.1f} emails/sec)")
                 
             except Exception as e:
-                print(f"Error processing message UID {uid}: {str(e)}")
-                self.stats.errors += 1
+                print(f"Error: Unexpected error processing message UID {uid}: {str(e)}")
+                self.stats.increment_error_type('processing')
                 continue
     
     def _process_single_message(self, uid: str, message: email.message.Message) -> bool:
@@ -1774,37 +1945,43 @@ class EmailProcessor:
                     self.output_writer.write_content(body_content)
                 except Exception as e:
                     print(f"Warning: Failed to write email content to output file: {str(e)}")
+                    self.stats.increment_error_type('output')
                     # Don't fail processing for output errors, just log and continue
             
             # Add content hash to cache for future duplicate detection
             if self.cache_manager:
-                content_hash = self.content_processor.hash_content(body_content)
-                if content_hash:
-                    self.cache_manager.add_content_hash(content_hash)
+                try:
+                    content_hash = self.content_processor.hash_content(body_content)
+                    if content_hash:
+                        self.cache_manager.add_content_hash(content_hash)
+                except Exception as e:
+                    print(f"Warning: Failed to cache content hash: {str(e)}")
+                    self.stats.increment_error_type('cache')
             
             return True  # Message was retained
                 
         except Exception as e:
-            print(f"Error processing message content for UID {uid}: {str(e)}")
-            self.stats.errors += 1
+            print(f"Error: Failed to process message content for UID {uid}: {str(e)}")
+            self.stats.increment_error_type('processing')
             return False  # Message was not retained due to error
     
     def _show_message_preview(self) -> None:
-        """Show preview of first 3 retained messages for quality check"""
+        """Show enhanced preview of first 3 retained messages for quality check"""
         if not self.processed_messages:
             print("\nNo messages retained for preview.")
             return
         
         preview_count = min(3, len(self.processed_messages))
         print(f"\nPreview of first {preview_count} retained message(s):")
-        print("=" * 60)
+        print("=" * 80)
         
         for i, message in enumerate(self.processed_messages[:preview_count], 1):
             print(f"\nMessage {i}:")
-            print(f"Subject: {message['subject']}")
-            print(f"Date: {message['date']}")
-            print(f"Word count: {message['word_count']}")
-            print("Content preview (first 200 characters):")
+            print(f"  UID: {message['uid']}")
+            print(f"  Subject: {message['subject']}")
+            print(f"  Date: {message['date']}")
+            print(f"  Word count: {message['word_count']}")
+            print(f"  Content preview (first 200 characters):")
             
             # Show first 200 characters of content with proper line breaks
             content_preview = message['content'][:200]
@@ -1814,61 +1991,130 @@ class EmailProcessor:
             # Format preview with proper indentation
             lines = content_preview.split('\n')
             for line in lines:
-                print(f"  {line}")
+                print(f"    {line}")
             
             if i < preview_count:
-                print("-" * 40)
+                print("-" * 60)
 
 
 
 
 def main():
     """Main entry point for the Email Exporter Script"""
-    print("Email Exporter Script Starting...")
+    print("=" * 80)
+    print("EMAIL EXPORTER SCRIPT")
+    print("=" * 80)
+    print("Starting Email Exporter Script...")
+    
+    script_start_time = datetime.datetime.now()
     
     try:
         # Initialize and validate configuration
+        print("\n[1/6] Configuration Validation")
+        print("-" * 40)
         config = EmailExporterConfig()
         config.validate_environment()
         
-        # Display connection information
+        # Display connection information prominently
+        print(f"\n[2/6] Connection Information")
+        print("-" * 40)
+        print(f"Connected email address: {config.email_address}")
+        print(f"Email provider: {config.provider.upper()}")
         print(f"Ready to connect to {config.provider} account: {config.email_address}")
         
         # Display IMAP settings for verification
         imap_server, port, sent_folder = config.get_imap_settings()
-        print(f"IMAP Settings: {imap_server}:{port}, Sent folder: {sent_folder}")
+        print(f"IMAP Settings: {imap_server}:{port}")
+        print(f"Target folder: {sent_folder}")
         
         # Test IMAP connection with retry logic
+        print(f"\n[3/6] IMAP Connection")
+        print("-" * 40)
         with IMAPConnectionManager(config) as imap_manager:
             # Attempt to connect
             if not imap_manager.connect():
                 print("Error: Failed to establish IMAP connection after all retry attempts")
+                print("Please check your credentials and internet connection.")
                 sys.exit(1)
             
             # Select sent mail folder
             if not imap_manager.select_sent_folder():
                 print("Error: Failed to select sent mail folder")
+                print("Please verify that the sent mail folder exists for your provider.")
                 sys.exit(1)
             
             print("IMAP connection and folder selection successful!")
             
-            # Initialize output writer, cache manager, and email processor
+            # Initialize components
+            print(f"\n[4/6] Component Initialization")
+            print("-" * 40)
             output_writer = OutputWriter(config.provider)
             cache_manager = CacheManager(config.provider)
             processor = EmailProcessor(imap_manager, cache_manager, output_writer)
             
+            print("All components initialized successfully")
+            
+            # Process emails
+            print(f"\n[5/6] Email Processing")
+            print("-" * 40)
+            print(f"Processing emails from account: {config.email_address}")
+            print(f"Batch size: 500 messages")
+            print(f"Progress logging interval: 100 messages")
+            
             # Process emails with batch size of 500 and progress logging every 100 emails
             final_stats = processor.process_emails(batch_size=500, progress_interval=100)
             
-            print("\nEmail processing completed successfully!")
+            # Final summary and output information
+            print(f"\n[6/6] Final Summary")
+            print("-" * 40)
+            
+            # Calculate total script execution time
+            script_end_time = datetime.datetime.now()
+            total_duration = script_end_time - script_start_time
+            total_seconds = int(total_duration.total_seconds())
+            hours, remainder = divmod(total_seconds, 3600)
+            minutes, seconds = divmod(remainder, 60)
+            
+            if hours > 0:
+                duration_str = f"{hours}h {minutes}m {seconds}s"
+            elif minutes > 0:
+                duration_str = f"{minutes}m {seconds}s"
+            else:
+                duration_str = f"{seconds}s"
+            
+            print("Email processing completed successfully!")
+            print(f"Total script execution time: {duration_str}")
             print(f"Output saved to: {output_writer.get_output_filename()}")
-            print("Connection will be automatically cleaned up when exiting context manager.")
+            print(f"Connected email address: {config.email_address}")
+            
+            # Show success status based on results
+            if final_stats.retained > 0:
+                print(f"✓ Success: {final_stats.retained} emails processed and saved")
+            else:
+                print("⚠ Warning: No emails were retained (check filters and content)")
+            
+            if final_stats.errors > 0:
+                print(f"⚠ Note: {final_stats.errors} errors occurred during processing")
+            
+            print("\nConnection will be automatically cleaned up when exiting context manager.")
+            print("=" * 80)
         
     except KeyboardInterrupt:
-        print("\nScript interrupted by user")
+        print("\n" + "=" * 80)
+        print("Script interrupted by user (Ctrl+C)")
+        print("=" * 80)
         sys.exit(0)
     except Exception as e:
-        print(f"Unexpected error: {e}")
+        print(f"\n" + "=" * 80)
+        print(f"CRITICAL ERROR: Unexpected error occurred")
+        print("-" * 40)
+        print(f"Error: {e}")
+        print(f"Please check your configuration and try again.")
+        print("If the problem persists, check:")
+        print("1. Your .env file contains valid credentials")
+        print("2. Your internet connection is stable")
+        print("3. Your email provider allows IMAP access")
+        print("=" * 80)
         sys.exit(1)
 
 
