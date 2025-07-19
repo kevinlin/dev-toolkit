@@ -24,6 +24,11 @@ source .venv/bin/activate  # On Unix/macOS
 uv pip install -e .
 ```
 
+4. If you have a `.env` file in the project root, export the environment variables:
+```bash
+set -a; . ./.env; set +a
+```
+
 ## Project Structure
 
 ```
