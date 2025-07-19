@@ -46,21 +46,21 @@
   - Write unit tests for cache operations and duplicate detection
   - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 6.7, 7.5_
 
-- [ ] 7. Build output file management system
-  - Create output directory creation logic (/output folder)
-  - Implement timestamped filename generation (provider-yyyyMMdd-HHmmss.txt format)
-  - Add UTF-8 encoded file writing with proper content formatting
-  - Create email delimiter system for separating individual messages in output
-  - Write unit tests for file operations and output formatting
-  - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7_
-
-- [ ] 8. Implement deduplication based on content comparison
+- [ ] 7. Implement deduplication based on content comparison
   - Create content hashing system for exact duplicate detection
   - Implement body content comparison logic
   - Add duplicate tracking and skipping functionality
   - Integrate deduplication with caching system
   - Write unit tests for content hashing and deduplication logic
   - _Requirements: 3.4, 6.6_
+
+- [ ] 8. Build output file management system
+  - Create output directory creation logic (/output folder)
+  - Implement timestamped filename generation (provider-yyyyMMdd-HHmmss.txt format)
+  - Add UTF-8 encoded file writing with proper content formatting
+  - Create email delimiter system for separating individual messages in output
+  - Write unit tests for file operations and output formatting
+  - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7_
 
 - [ ] 9. Create comprehensive logging and summary reporting
   - Implement console progress logging with batch processing updates
