@@ -2,7 +2,7 @@
 """
 Email Exporter Script
 
-Extracts and processes sent emails from Gmail or iCloud accounts via IMAP.
+Extracts and processes sent emails from Gmail, iCloud, or Outlook accounts via IMAP.
 Processes only sent messages, extracts clean body content while excluding 
 quoted replies and duplicates, and outputs content to timestamped plain text files.
 """
@@ -152,7 +152,8 @@ class EmailExporterConfig:
     # Provider-specific IMAP configurations
     PROVIDER_CONFIGS = {
         'gmail': ProviderConfig('imap.gmail.com', 993, '[Gmail]/Sent Mail'),
-        'icloud': ProviderConfig('imap.mail.me.com', 993, '"Sent Messages"')
+        'icloud': ProviderConfig('imap.mail.me.com', 993, '"Sent Messages"'),
+        'outlook': ProviderConfig('outlook.office365.com', 993, 'Sent Items')
     }
     
     def __init__(self):
@@ -377,6 +378,25 @@ class IMAPConnectionManager:
                             print(f"Failed to select {alt_folder}: {str(e)}")
                             continue
             
+            # For Outlook, try common alternative folder names
+            if self.config.provider == 'outlook':
+                alternative_folders = ['Sent', 'Sent Messages', 'INBOX.Sent Items', 'INBOX/Sent Items', 'INBOX.Sent', 'INBOX/Sent']
+                for alt_folder in alternative_folders:
+                    if alt_folder in available_folders:
+                        print(f"Trying alternative folder: {alt_folder}")
+                        try:
+                            status, data = self.connection.select(alt_folder)
+                            if status == 'OK':
+                                print(f"Successfully selected alternative folder: {alt_folder}")
+                                # Update config for future use
+                                self.config.sent_folder = alt_folder
+                                message_count = int(data[0]) if data and data[0] else 0
+                                print(f"Folder '{alt_folder}' contains {message_count} messages")
+                                return True
+                        except Exception as e:
+                            print(f"Failed to select {alt_folder}: {str(e)}")
+                            continue
+            
             return False
             
             # Get folder message count
@@ -556,7 +576,7 @@ class CacheManager:
         Initialize cache manager for the specified provider.
         
         Args:
-            provider: Email provider ('gmail' or 'icloud')
+            provider: Email provider ('gmail', 'icloud', or 'outlook')
             output_dir: Directory where cache files are stored
         """
         self.provider = provider.lower()
@@ -767,7 +787,7 @@ class OutputWriter:
         Initialize OutputWriter for the specified provider.
         
         Args:
-            provider: Email provider ('gmail' or 'icloud')
+            provider: Email provider ('gmail', 'icloud', or 'outlook')
             output_dir: Directory where output files are stored
         """
         self.provider = provider.lower()

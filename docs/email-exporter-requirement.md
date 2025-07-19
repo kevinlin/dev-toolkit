@@ -1,10 +1,10 @@
-# Email Exporter Script Specification (Gmail & iCloud)
+# Email Exporter Script Specification (Gmail, iCloud & Outlook)
 
 ## Overview
-This document defines the specification for a Python script that extracts and cleans the content of sent emails from Gmail or iCloud accounts, and aggregates them into plain text files for later use in AI training.
+This document defines the specification for a Python script that extracts and cleans the content of sent emails from Gmail, iCloud, or Outlook accounts, and aggregates them into plain text files for later use in AI training.
 
 The script will:
-- Connect to either Gmail or iCloud via IMAP using app-specific passwords.
+- Connect to Gmail, iCloud, or Outlook via IMAP using app-specific passwords.
 - Process only messages in the Sent folder.
 - Extract and clean the user-authored body content.
 - Exclude quoted replies, forwards, duplicates, and trivial messages.
@@ -21,10 +21,11 @@ The script will:
 
 ### Email Processing
 - One-time execution, no user prompts.
-- Supports either Gmail or iCloud per run.
+- Supports Gmail, iCloud, or Outlook per run.
 - Folder:
   - Gmail: `[Gmail]/Sent Mail`
   - iCloud: `Sent Messages`
+  - Outlook: `Sent Items`
 - Full mailbox traversal using pagination (batches of 500).
 - Sequential message processing.
 - Filter messages:
@@ -34,7 +35,7 @@ The script will:
   - Skip exact duplicates.
 
 ### Output
-- One `.txt` file per run, named: `gmail-yyyyMMdd-HHmmss.txt` or `icloud-yyyyMMdd-HHmmss.txt`
+- One `.txt` file per run, named: `gmail-yyyyMMdd-HHmmss.txt`, `icloud-yyyyMMdd-HHmmss.txt`, or `outlook-yyyyMMdd-HHmmss.txt`
 - Output directory: `/output` (created if not exists).
 - UTF-8 encoded plain text.
 - Only cleaned body text included (no metadata).
@@ -61,6 +62,7 @@ The script will:
 - Cache files stored in `/output`, named per account:
   - `gmail.cache.json`
   - `icloud.cache.json`
+  - `outlook.cache.json`
 - No reset logic; manual deletion assumed.
 
 ### Code Architecture
@@ -76,7 +78,7 @@ The script will:
 
 ## Environment Configuration (`.env`)
 ```dotenv
-PROVIDER=gmail             # or icloud
+PROVIDER=gmail             # or icloud or outlook
 EMAIL_ADDRESS=you@example.com
 APP_PASSWORD=yourapppassword123
 ```

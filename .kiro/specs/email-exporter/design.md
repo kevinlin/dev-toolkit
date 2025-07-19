@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Email Exporter Script is designed as a single-file Python application that provides a streamlined solution for extracting and processing sent emails from Gmail or iCloud accounts. The architecture emphasizes simplicity, reliability, and maintainability while handling the complexities of IMAP communication, HTML parsing, content filtering, and caching.
+The Email Exporter Script is designed as a single-file Python application that provides a streamlined solution for extracting and processing sent emails from Gmail, iCloud, or Outlook accounts. The architecture emphasizes simplicity, reliability, and maintainability while handling the complexities of IMAP communication, HTML parsing, content filtering, and caching.
 
 The system follows a modular functional design within a single file, making it easy to deploy and maintain while providing clear separation of concerns through well-defined functions.
 
@@ -57,6 +57,7 @@ class EmailExporterConfig:
 **Provider-Specific Settings:**
 - Gmail: `imap.gmail.com:993`, folder `[Gmail]/Sent Mail`
 - iCloud: `imap.mail.me.com:993`, folder `Sent Messages`
+- Outlook: `outlook.office365.com:993`, folder `Sent Items`
 
 ### IMAP Connection Manager
 
@@ -175,7 +176,8 @@ class ProviderConfig:
     
 PROVIDER_CONFIGS = {
     'gmail': ProviderConfig('imap.gmail.com', 993, '[Gmail]/Sent Mail'),
-    'icloud': ProviderConfig('imap.mail.me.com', 993, 'Sent Messages')
+    'icloud': ProviderConfig('imap.mail.me.com', 993, 'Sent Messages'),
+    'outlook': ProviderConfig('outlook.office365.com', 993, 'Sent Items')
 }
 ```
 

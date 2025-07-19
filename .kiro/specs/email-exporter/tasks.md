@@ -90,3 +90,17 @@
   - Updated all unit tests to import from the renamed module (email_exporter)
   - All existing tests continue to pass after refactoring
   - _Requirements: 8.1, 8.2, 8.3, 8.5_
+
+- [x] 11. Add Outlook/Hotmail mail support
+  - Add Outlook provider configuration to EmailExporterConfig.PROVIDER_CONFIGS
+  - Configure IMAP settings for Outlook.com accounts (outlook.office365.com:993, "Sent Items" folder)
+  - Support multiple Outlook domain formats (@outlook.com, @hotmail.com, @live.com, @msn.com)
+  - Implement Outlook-specific folder selection logic with fallback options
+  - Add Outlook cache file support (outlook.cache.json)
+  - Update environment validation to accept "outlook" as valid provider
+  - Add Outlook-specific error handling for common connection issues
+  - Test with Outlook.com account using app-specific password authentication
+  - Update output file naming to support "outlook-yyyyMMdd-HHmmss.txt" format
+  - Write unit tests for Outlook provider configuration and connection handling
+  - Update documentation to reflect Outlook support in requirements and design documents
+  - _Requirements: 1.1, 1.2, 1.3, 1.4, 2.1, 2.2, 4.1, 4.2, 6.1, 6.2, 6.3, 8.4_

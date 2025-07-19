@@ -2,6 +2,36 @@
 
 A collection of development utilities and testbeds for various Python experiments and tools.
 
+## Email Exporter
+
+The main utility in this toolkit is the Email Exporter - a Python script that extracts and processes sent emails from Gmail, iCloud, or Outlook accounts via IMAP. It processes only sent messages, extracts clean body content while excluding quoted replies and duplicates, and outputs content to timestamped plain text files suitable for AI training.
+
+### Features
+
+- **Multi-Provider Support**: Works with Gmail, iCloud, and Outlook accounts
+- **Secure Authentication**: Uses app-specific passwords for enhanced security
+- **Content Filtering**: Excludes quoted replies, forwards, and system-generated messages
+- **Duplicate Detection**: Skips duplicate content using hash comparison
+- **Batch Processing**: Handles large mailboxes with pagination (500 messages per batch)
+- **Progress Tracking**: Console logging with progress updates every 100 emails
+- **Caching System**: Prevents reprocessing of already-handled emails
+- **Error Recovery**: Robust error handling with retry logic for network issues
+
+### Quick Start
+
+1. Copy the environment template and configure your credentials:
+```bash
+cp .env.example .env
+# Edit .env with your email provider, address, and app-specific password
+```
+
+2. Run the email exporter:
+```bash
+python email_exporter.py
+```
+
+See `.env.example` for detailed instructions on obtaining app-specific passwords for each provider.
+
 ## Setup
 
 This project uses `uv` for dependency management. To get started:
