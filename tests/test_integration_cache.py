@@ -94,19 +94,27 @@ class TestCacheIntegration(unittest.TestCase):
     
     def test_duplicate_detection_during_processing(self):
         """Test that cached UIDs are detected as duplicates during processing"""
-        # Pre-populate cache with some UIDs
+        # Pre-populate cache with some UIDs and save to disk
         cached_uids = ['uid1', 'uid2']
         for uid in cached_uids:
             self.cache_manager.mark_processed(uid)
+        self.cache_manager.save_cache()  # Save to disk so load_cache() works
         
         # Set up batch with mix of cached and new UIDs
         test_batch = ['uid1', 'uid2', 'uid3', 'uid4']  # uid1, uid2 are cached
         self.mock_imap_manager.fetch_message_uids.return_value = [test_batch]
         
         # Mock fetch_message to return valid messages for new UIDs only
+        # Create different content for each message to avoid content-based duplicates
         def mock_fetch_message(uid):
             if uid in cached_uids:
                 self.fail(f"Should not fetch cached UID: {uid}")
+            elif uid == 'uid3':
+                return self._create_mock_email_message(uid, "Subject 3", 
+                    "This is unique content for uid3 with more than twenty words to pass validation. It contains meaningful content for testing purposes and should not be detected as duplicate.")
+            elif uid == 'uid4':
+                return self._create_mock_email_message(uid, "Subject 4", 
+                    "This is different unique content for uid4 with more than twenty words to pass validation. It contains different meaningful content for testing purposes and should not be detected as duplicate.")
             return self._create_mock_email_message(uid)
         
         self.mock_imap_manager.fetch_message.side_effect = mock_fetch_message
@@ -124,8 +132,20 @@ class TestCacheIntegration(unittest.TestCase):
         test_batch = ['uid1', 'uid2', 'uid3']
         self.mock_imap_manager.fetch_message_uids.return_value = [test_batch]
         
-        # Mock fetch_message to return valid messages
-        self.mock_imap_manager.fetch_message.side_effect = lambda uid: self._create_mock_email_message(uid)
+        # Mock fetch_message to return valid messages with unique content
+        def mock_fetch_message(uid):
+            if uid == 'uid1':
+                return self._create_mock_email_message(uid, "Subject 1", 
+                    "This is unique content for uid1 with more than twenty words to pass validation. It contains meaningful content for testing purposes and should not be detected as duplicate.")
+            elif uid == 'uid2':
+                return self._create_mock_email_message(uid, "Subject 2", 
+                    "This is different unique content for uid2 with more than twenty words to pass validation. It contains different meaningful content for testing purposes and should not be detected as duplicate.")
+            elif uid == 'uid3':
+                return self._create_mock_email_message(uid, "Subject 3", 
+                    "This is another unique content for uid3 with more than twenty words to pass validation. It contains another different meaningful content for testing purposes and should not be detected as duplicate.")
+            return self._create_mock_email_message(uid)
+        
+        self.mock_imap_manager.fetch_message.side_effect = mock_fetch_message
         
         # Verify cache file doesn't exist initially
         self.assertFalse(os.path.exists(self.cache_manager.cache_file))
@@ -173,10 +193,20 @@ class TestCacheIntegration(unittest.TestCase):
     
     def test_cache_persistence_across_multiple_runs(self):
         """Test that cache persists across multiple processing runs"""
-        # First run - process some UIDs
+        # First run - process some UIDs with unique content
         first_batch = ['uid1', 'uid2']
         self.mock_imap_manager.fetch_message_uids.return_value = [first_batch]
-        self.mock_imap_manager.fetch_message.side_effect = lambda uid: self._create_mock_email_message(uid)
+        
+        def first_mock_fetch_message(uid):
+            if uid == 'uid1':
+                return self._create_mock_email_message(uid, "Subject 1", 
+                    "This is unique content for uid1 first run with more than twenty words to pass validation. It contains meaningful content for testing purposes and should not be detected as duplicate.")
+            elif uid == 'uid2':
+                return self._create_mock_email_message(uid, "Subject 2", 
+                    "This is different unique content for uid2 first run with more than twenty words to pass validation. It contains different meaningful content for testing purposes.")
+            return self._create_mock_email_message(uid)
+        
+        self.mock_imap_manager.fetch_message.side_effect = first_mock_fetch_message
         
         self.email_processor.process_emails()
         
@@ -191,8 +221,21 @@ class TestCacheIntegration(unittest.TestCase):
         second_batch = ['uid2', 'uid3', 'uid4']  # uid2 was processed before
         self.mock_imap_manager.fetch_message_uids.return_value = [second_batch]
         
-        # Reset mock call count
+        # Reset mock call count and set up unique content for new UIDs
         self.mock_imap_manager.fetch_message.reset_mock()
+        
+        def second_mock_fetch_message(uid):
+            if uid == 'uid2':
+                self.fail(f"Should not fetch cached UID: {uid}")
+            elif uid == 'uid3':
+                return self._create_mock_email_message(uid, "Subject 3", 
+                    "This is unique content for uid3 second run with more than twenty words to pass validation. It contains meaningful content for testing purposes and should not be detected as duplicate.")
+            elif uid == 'uid4':
+                return self._create_mock_email_message(uid, "Subject 4", 
+                    "This is different unique content for uid4 second run with more than twenty words to pass validation. It contains different meaningful content for testing purposes.")
+            return self._create_mock_email_message(uid)
+        
+        self.mock_imap_manager.fetch_message.side_effect = second_mock_fetch_message
         
         second_stats = new_processor.process_emails()
         
@@ -287,7 +330,14 @@ class TestCacheIntegration(unittest.TestCase):
         # Create large batch
         large_batch = [f'uid_{i:05d}' for i in range(1000)]
         self.mock_imap_manager.fetch_message_uids.return_value = [large_batch]
-        self.mock_imap_manager.fetch_message.side_effect = lambda uid: self._create_mock_email_message(uid)
+        
+        # Create unique content for each message to avoid content-based duplicates
+        def mock_fetch_message(uid):
+            uid_num = uid.split('_')[1]
+            return self._create_mock_email_message(uid, f"Subject {uid_num}", 
+                f"This is unique content for {uid} with more than twenty words to pass validation. It contains meaningful content for testing purposes and should not be detected as duplicate. Message number {uid_num}.")
+        
+        self.mock_imap_manager.fetch_message.side_effect = mock_fetch_message
         
         start_time = time.time()
         stats = self.email_processor.process_emails()

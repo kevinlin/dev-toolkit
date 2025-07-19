@@ -31,10 +31,13 @@
   - _Requirements: 3.5, 3.6, 4.6_
 
 - [x] 5. Implement content filtering and validation
-  - Create word count validation tco exclude messages with fewer than 20 words
+  - Create word count validation to exclude messages with fewer than 20 words
   - Implement system-generated content detection (auto-replies, receipts)
   - Build quoted reply and forwarded text stripping using regex patterns
   - Add content validation functions for meaningful email detection
+  - **ENHANCED**: Add opening greetings filtering (Hi Krishna, Hello Ben, Dear Raina, etc.)
+  - **ENHANCED**: Add Kevin Lin signature filtering (Best regards/Sincerely yours, Kevin Lin)
+  - **ENHANCED**: Remove all blank lines from processed content
   - Write unit tests for content filtering and validation
   - _Requirements: 3.1, 3.2, 3.3_
 
@@ -54,7 +57,7 @@
   - Write unit tests for content hashing and deduplication logic
   - _Requirements: 3.4, 6.6_
 
-- [ ] 8. Build output file management system
+- [x] 8. Build output file management system
   - Create output directory creation logic (/output folder)
   - Implement timestamped filename generation (provider-yyyyMMdd-HHmmss.txt format)
   - Add UTF-8 encoded file writing with proper content formatting

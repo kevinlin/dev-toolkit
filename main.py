@@ -533,6 +533,8 @@ class ContentProcessor:
             # Clean and normalize the extracted content
             if body_content:
                 body_content = self.strip_quoted_replies(body_content)
+                body_content = self.strip_opening_greetings(body_content)
+                body_content = self.strip_signatures(body_content)
                 body_content = self.normalize_whitespace(body_content)
             
             return body_content
@@ -745,15 +747,183 @@ class ContentProcessor:
             print(f"Warning: Error stripping quoted replies: {str(e)}")
             return content
     
+    def strip_opening_greetings(self, content: str) -> str:
+        """
+        Strip opening greetings from email content.
+        
+        Args:
+            content: Email content to clean
+            
+        Returns:
+            str: Content with opening greetings removed
+        """
+        if not content:
+            return ""
+        
+        try:
+            lines = content.split('\n')
+            cleaned_lines = []
+            greeting_found = False
+            
+            # Patterns for opening greetings - more precise patterns
+            greeting_patterns = [
+                # Standard greetings with names (ensure they end the line after name/punctuation)
+                r'^(Hi|Hello|Hey|Dear)\s+[A-Za-z][A-Za-z\s\'.-]*[,:]?\s*$',  # Hi Krishna, Hello Ben, Dear Raina
+                
+                # Formal greetings
+                r'^Dear\s+(Sir|Madam|Sir\s+or\s+Madam)[,:]?\s*$',  # Dear Sir or Madam
+                r'^To\s+whom\s+it\s+may\s+concern[,:]?\s*$',  # To whom it may concern
+                
+                # Group greetings
+                r'^(Hi|Hello|Hey)\s+(all|everyone|team|folks|guys)[,:]?\s*$',  # Hi all, Hello everyone
+                r'^(Hi|Hello|Hey)\s+there[,:!.]?\s*$',  # Hi there
+                
+                # Time-based greetings
+                r'^(Good\s+morning|Good\s+afternoon|Good\s+evening)[,:]?\s*$',
+                r'^(Good\s+morning|Good\s+afternoon|Good\s+evening)\s+[A-Za-z][A-Za-z\s\'.-]*[,:]?\s*$',
+                
+                # Simple greetings
+                r'^(Hi|Hello|Hey)[,:]?\s*$',  # Just "Hi," or "Hello"
+                
+                # Multiple name greetings
+                r'^(Hi|Hello|Hey|Dear)\s+[A-Za-z][A-Za-z\s\'.-]*(\s+and\s+[A-Za-z][A-Za-z\s\'.-]*)+[,:]?\s*$',  # Hi John and Jane
+            ]
+            
+            # Compile patterns for efficiency
+            compiled_greeting_patterns = [re.compile(pattern, re.IGNORECASE) for pattern in greeting_patterns]
+            
+            # Process lines and remove greeting lines at the very beginning only
+            for i, line in enumerate(lines):
+                line_stripped = line.strip()
+                
+                # Only check for greetings in the first few non-empty lines
+                if i < 3 and line_stripped:  # Only check first 3 non-empty lines for greetings
+                    is_greeting = any(pattern.match(line_stripped) for pattern in compiled_greeting_patterns)
+                    if is_greeting:
+                        greeting_found = True
+                        continue  # Skip greeting lines
+                    elif greeting_found:
+                        # If we already found a greeting and this line is not a greeting, 
+                        # we're done with greeting removal
+                        pass
+                
+                # Keep all other lines
+                cleaned_lines.append(line)
+            
+            return '\n'.join(cleaned_lines)
+            
+        except Exception as e:
+            print(f"Warning: Error stripping opening greetings: {str(e)}")
+            return content
+    
+    def strip_signatures(self, content: str) -> str:
+        """
+        Strip signatures from email content, including Kevin Lin's specific signature.
+        
+        Args:
+            content: Email content to clean
+            
+        Returns:
+            str: Content with signatures removed
+        """
+        if not content:
+            return ""
+        
+        try:
+            lines = content.split('\n')
+            cleaned_lines = []
+            
+            # Patterns for signature detection
+            signature_patterns = [
+                # Kevin Lin's specific signature patterns
+                r'^(Best\s+regards|Sincerely\s+yours|Regards|Sincerely)[,:]?\s*$',
+                r'^Kevin\s+Lin\s*$',
+                r'^Lin\s+Yun\s*$',
+                
+                # Common signature closings
+                r'^(Best|Regards|Thanks|Thank\s+you|Cheers|Yours\s+truly|Yours\s+sincerely)[,:]?\s*$',
+                r'^(Kind\s+regards|Warm\s+regards|With\s+regards)[,:]?\s*$',
+                r'^(Best\s+wishes|Many\s+thanks|Thank\s+you\s+very\s+much)[,:]?\s*$',
+                
+                # Signature separators
+                r'^\s*--\s*$',  # Standard signature separator
+                r'^\s*---+\s*$',  # Multiple dashes
+                r'^\s*_{3,}\s*$',  # Multiple underscores
+                
+                # Mobile signatures
+                r'^Sent\s+from\s+my\s+.*$',  # Sent from my iPhone/Android
+                r'^Get\s+Outlook\s+for\s+.*$',  # Get Outlook for iOS/Android
+                
+                # Name-like patterns (common names that might be signatures)
+                r'^[A-Z][a-z]+\s+[A-Z][a-z]+\s*$',  # First Last
+                r'^[A-Z][a-z]+\s+[A-Z]\.\s+[A-Z][a-z]+\s*$',  # First M. Last
+                r'^[A-Z]\.\s+[A-Z][a-z]+\s*$',  # F. Last
+            ]
+            
+            # Compile patterns for efficiency
+            compiled_signature_patterns = [re.compile(pattern, re.IGNORECASE) for pattern in signature_patterns]
+            
+            # Work backwards from the end to detect signature blocks
+            signature_start_index = len(lines)
+            
+            # Look for signature patterns starting from the end
+            for i in range(len(lines) - 1, -1, -1):
+                line = lines[i].strip()
+                
+                # Skip empty lines
+                if not line:
+                    continue
+                
+                # Check if this line matches a signature pattern
+                is_signature_line = any(pattern.match(line) for pattern in compiled_signature_patterns)
+                
+                if is_signature_line:
+                    # Found a signature line, mark this as potential signature start
+                    signature_start_index = i
+                    
+                    # Look for preceding signature lines (like "Best regards" followed by "Kevin Lin")
+                    # Continue checking previous lines for related signature content
+                    for j in range(i - 1, max(0, i - 5), -1):  # Check up to 5 lines before
+                        prev_line = lines[j].strip()
+                        if not prev_line:
+                            continue  # Skip empty lines
+                        
+                        # Check if previous line is also part of signature
+                        is_prev_signature = any(pattern.match(prev_line) for pattern in compiled_signature_patterns)
+                        if is_prev_signature:
+                            signature_start_index = j
+                        else:
+                            break  # Stop if we hit non-signature content
+                    
+                    break  # Found signature block, stop searching
+                else:
+                    # If we hit substantial content (more than 10 words), stop looking for signatures
+                    words = line.split()
+                    if len(words) > 10:
+                        break
+            
+            # Keep only lines before the signature
+            cleaned_lines = lines[:signature_start_index]
+            
+            # Remove trailing empty lines
+            while cleaned_lines and not cleaned_lines[-1].strip():
+                cleaned_lines.pop()
+            
+            return '\n'.join(cleaned_lines)
+            
+        except Exception as e:
+            print(f"Warning: Error stripping signatures: {str(e)}")
+            return content
+    
     def normalize_whitespace(self, content: str) -> str:
         """
-        Normalize whitespace and standardize line breaks.
+        Normalize whitespace and standardize line breaks, removing blank lines.
         
         Args:
             content: Content to normalize
             
         Returns:
-            str: Content with normalized whitespace
+            str: Content with normalized whitespace and blank lines removed
         """
         if not content:
             return ""
@@ -766,20 +936,14 @@ class ContentProcessor:
             # Replace multiple spaces with single space
             content = re.sub(r'[ \t]+', ' ', content)
             
-            # Replace multiple consecutive newlines with maximum of 2 (to preserve paragraphs)
-            content = re.sub(r'\n\s*\n\s*\n+', '\n\n', content)
-            
             # Remove leading/trailing whitespace from each line
             lines = content.split('\n')
             cleaned_lines = [line.strip() for line in lines]
             
-            # Remove empty lines at the beginning and end
-            while cleaned_lines and not cleaned_lines[0]:
-                cleaned_lines.pop(0)
-            while cleaned_lines and not cleaned_lines[-1]:
-                cleaned_lines.pop()
+            # Remove all blank lines as requested
+            cleaned_lines = [line for line in cleaned_lines if line]
             
-            # Join lines back together
+            # Join lines back together with single newlines
             content = '\n'.join(cleaned_lines)
             
             return content
@@ -1331,15 +1495,120 @@ class CacheManager:
         }
 
 
+class OutputWriter:
+    """Handles file creation and content writing for processed emails"""
+    
+    def __init__(self, provider: str, output_dir: str = "output"):
+        """
+        Initialize OutputWriter for the specified provider.
+        
+        Args:
+            provider: Email provider ('gmail' or 'icloud')
+            output_dir: Directory where output files are stored
+        """
+        self.provider = provider.lower()
+        self.output_dir = output_dir
+        self.output_file = None
+        self.file_handle = None
+        self.email_count = 0
+        
+        # Ensure output directory exists
+        self._ensure_output_directory()
+        
+        # Generate timestamped filename
+        self._generate_output_filename()
+    
+    def _ensure_output_directory(self) -> None:
+        """Create output directory if it doesn't exist"""
+        try:
+            if not os.path.exists(self.output_dir):
+                os.makedirs(self.output_dir)
+                print(f"Created output directory: {self.output_dir}")
+        except Exception as e:
+            raise Exception(f"Failed to create output directory {self.output_dir}: {str(e)}")
+    
+    def _generate_output_filename(self) -> None:
+        """Generate timestamped filename in format: provider-yyyyMMdd-HHmmss.txt"""
+        timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+        filename = f"{self.provider}-{timestamp}.txt"
+        self.output_file = os.path.join(self.output_dir, filename)
+        print(f"Output file will be: {self.output_file}")
+    
+    def create_output_file(self) -> None:
+        """Create and open the output file for writing"""
+        try:
+            self.file_handle = open(self.output_file, 'w', encoding='utf-8')
+            print(f"Created output file: {self.output_file}")
+        except Exception as e:
+            raise Exception(f"Failed to create output file {self.output_file}: {str(e)}")
+    
+    def write_content(self, content: str, email_number: Optional[int] = None) -> None:
+        """
+        Write email content to the output file with proper formatting.
+        
+        Args:
+            content: Cleaned email content to write
+            email_number: Optional email number for delimiter
+        """
+        if not self.file_handle:
+            raise Exception("Output file not created. Call create_output_file() first.")
+        
+        try:
+            # Use provided email number or increment internal counter
+            if email_number is None:
+                self.email_count += 1
+                email_number = self.email_count
+            
+            # Write email delimiter
+            delimiter = f"=== EMAIL {email_number} ===\n"
+            self.file_handle.write(delimiter)
+            
+            # Write cleaned content
+            self.file_handle.write(content)
+            
+            # Ensure content ends with newlines for proper separation
+            if not content.endswith('\n'):
+                self.file_handle.write('\n')
+            
+            # Add blank line for readability
+            self.file_handle.write('\n')
+            
+            # Flush to ensure content is written
+            self.file_handle.flush()
+            
+        except Exception as e:
+            raise Exception(f"Failed to write content to output file: {str(e)}")
+    
+    def finalize_output(self) -> None:
+        """Close the output file and finalize writing"""
+        if self.file_handle:
+            try:
+                self.file_handle.close()
+                self.file_handle = None
+                print(f"Output file finalized: {self.output_file}")
+                print(f"Total emails written: {self.email_count}")
+            except Exception as e:
+                print(f"Warning: Error closing output file: {str(e)}")
+    
+    def get_output_filename(self) -> str:
+        """Get the output filename"""
+        return self.output_file
+    
+    def get_email_count(self) -> int:
+        """Get the number of emails written to the output file"""
+        return self.email_count
+
+
 class EmailProcessor:
     """Handles email fetching, processing, and statistics tracking"""
     
-    def __init__(self, imap_manager: IMAPConnectionManager, cache_manager: Optional[CacheManager] = None):
+    def __init__(self, imap_manager: IMAPConnectionManager, cache_manager: Optional[CacheManager] = None, output_writer: Optional[OutputWriter] = None):
         self.imap_manager = imap_manager
         self.stats = ProcessingStats()
-        self.processed_messages = []  # Store processed messages for now
+        self.processed_messages = []  # Store processed messages for preview/summary
         self.content_processor = ContentProcessor()  # Initialize content processor
         self.cache_manager = cache_manager  # Cache manager for duplicate prevention
+        self.output_writer = output_writer  # Output writer for file management
     
     def process_emails(self, batch_size: int = 500, progress_interval: int = 100) -> ProcessingStats:
         """
@@ -1360,10 +1629,18 @@ class EmailProcessor:
             cache_stats = self.cache_manager.get_cache_stats()
             print(f"Cache loaded: {cache_stats['total_cached_uids']} previously processed UIDs, {cache_stats['total_cached_content_hashes']} content hashes")
         
+        # Create output file if output writer is available
+        if self.output_writer:
+            self.output_writer.create_output_file()
+        
         try:
             # Process emails in batches
             for batch_uids in self.imap_manager.fetch_message_uids(batch_size):
                 self._process_batch(batch_uids, progress_interval)
+            
+            # Finalize output file if output writer is available
+            if self.output_writer:
+                self.output_writer.finalize_output()
             
             # Save cache after processing if cache manager is available
             if self.cache_manager:
@@ -1374,11 +1651,22 @@ class EmailProcessor:
             print("\nEmail processing completed!")
             print(self.stats.get_summary())
             
+            # Show preview of first 3 retained messages
+            self._show_message_preview()
+            
             return self.stats
             
         except Exception as e:
             print(f"Error during email processing: {str(e)}")
             self.stats.errors += 1
+            
+            # Finalize output file even if there was an error
+            if self.output_writer:
+                try:
+                    self.output_writer.finalize_output()
+                    print("Output file finalized despite processing error")
+                except Exception as output_error:
+                    print(f"Warning: Failed to finalize output file after error: {str(output_error)}")
             
             # Try to save cache even if there was an error
             if self.cache_manager:
@@ -1470,7 +1758,7 @@ class EmailProcessor:
             subject = message.get('Subject', 'No Subject')
             date = message.get('Date', 'No Date')
             
-            # Store processed message with cleaned content
+            # Store processed message with cleaned content for preview
             self.stats.retained += 1
             self.processed_messages.append({
                 'uid': uid,
@@ -1479,6 +1767,14 @@ class EmailProcessor:
                 'content': body_content,
                 'word_count': len(body_content.split())
             })
+            
+            # Write content to output file if output writer is available
+            if self.output_writer:
+                try:
+                    self.output_writer.write_content(body_content)
+                except Exception as e:
+                    print(f"Warning: Failed to write email content to output file: {str(e)}")
+                    # Don't fail processing for output errors, just log and continue
             
             # Add content hash to cache for future duplicate detection
             if self.cache_manager:
@@ -1492,6 +1788,36 @@ class EmailProcessor:
             print(f"Error processing message content for UID {uid}: {str(e)}")
             self.stats.errors += 1
             return False  # Message was not retained due to error
+    
+    def _show_message_preview(self) -> None:
+        """Show preview of first 3 retained messages for quality check"""
+        if not self.processed_messages:
+            print("\nNo messages retained for preview.")
+            return
+        
+        preview_count = min(3, len(self.processed_messages))
+        print(f"\nPreview of first {preview_count} retained message(s):")
+        print("=" * 60)
+        
+        for i, message in enumerate(self.processed_messages[:preview_count], 1):
+            print(f"\nMessage {i}:")
+            print(f"Subject: {message['subject']}")
+            print(f"Date: {message['date']}")
+            print(f"Word count: {message['word_count']}")
+            print("Content preview (first 200 characters):")
+            
+            # Show first 200 characters of content with proper line breaks
+            content_preview = message['content'][:200]
+            if len(message['content']) > 200:
+                content_preview += "..."
+            
+            # Format preview with proper indentation
+            lines = content_preview.split('\n')
+            for line in lines:
+                print(f"  {line}")
+            
+            if i < preview_count:
+                print("-" * 40)
 
 
 
@@ -1526,15 +1852,16 @@ def main():
             
             print("IMAP connection and folder selection successful!")
             
-            # Initialize email processor and start processing
-            # Create a cache manager for the email processor
+            # Initialize output writer, cache manager, and email processor
+            output_writer = OutputWriter(config.provider)
             cache_manager = CacheManager(config.provider)
-            processor = EmailProcessor(imap_manager, cache_manager)
+            processor = EmailProcessor(imap_manager, cache_manager, output_writer)
             
             # Process emails with batch size of 500 and progress logging every 100 emails
             final_stats = processor.process_emails(batch_size=500, progress_interval=100)
             
             print("\nEmail processing completed successfully!")
+            print(f"Output saved to: {output_writer.get_output_filename()}")
             print("Connection will be automatically cleaned up when exiting context manager.")
         
     except KeyboardInterrupt:

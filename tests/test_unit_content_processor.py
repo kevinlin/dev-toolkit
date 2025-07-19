@@ -184,7 +184,7 @@ Original message content."""
         
         result = self.processor.normalize_whitespace(content)
         
-        self.assertEqual(result, "This has lots of spaces and\n\nmultiple newlines")
+        self.assertEqual(result, "This has lots of spaces and\nmultiple newlines")
     
     def test_normalize_whitespace_line_breaks(self):
         """Test line break normalization"""
@@ -372,10 +372,15 @@ Original message content."""
         msg['From'] = 'test@example.com'
         msg.set_content("<p>HTML content</p>", subtype='html')
         
+        # Mock all the filtering steps to preserve the converted content
         with patch.object(self.processor, 'convert_html_to_text', return_value="Converted HTML"):
-            result = self.processor.extract_body_content(msg)
-            
-            self.assertEqual(result, "Converted HTML")
+            with patch.object(self.processor, 'strip_quoted_replies', side_effect=lambda x: x):
+                with patch.object(self.processor, 'strip_opening_greetings', side_effect=lambda x: x):
+                    with patch.object(self.processor, 'strip_signatures', side_effect=lambda x: x):
+                        with patch.object(self.processor, 'normalize_whitespace', side_effect=lambda x: x):
+                            result = self.processor.extract_body_content(msg)
+                            
+                            self.assertEqual(result, "Converted HTML")
     
     def test_extract_body_content_with_attachments(self):
         """Test body extraction skips attachments"""
@@ -426,20 +431,24 @@ This is a test message with UTF-8 encoding."""
         msg['From'] = 'test@example.com'
         msg.set_content("Test content")
         
-        with patch.object(self.processor, 'strip_quoted_replies', return_value="cleaned content") as mock_strip:
-            with patch.object(self.processor, 'normalize_whitespace', return_value="normalized content") as mock_normalize:
-                result = self.processor.extract_body_content(msg)
-                
-                mock_strip.assert_called_once()
-                mock_normalize.assert_called_once_with("cleaned content")
-                self.assertEqual(result, "normalized content")
+        with patch.object(self.processor, 'strip_quoted_replies', return_value="after_quotes") as mock_strip_quotes:
+            with patch.object(self.processor, 'strip_opening_greetings', return_value="after_greetings") as mock_strip_greetings:
+                with patch.object(self.processor, 'strip_signatures', return_value="after_signatures") as mock_strip_signatures:
+                    with patch.object(self.processor, 'normalize_whitespace', return_value="normalized content") as mock_normalize:
+                        result = self.processor.extract_body_content(msg)
+                        
+                        mock_strip_quotes.assert_called_once()
+                        mock_strip_greetings.assert_called_once_with("after_quotes")
+                        mock_strip_signatures.assert_called_once_with("after_greetings")
+                        mock_normalize.assert_called_once_with("after_signatures")
+                        self.assertEqual(result, "normalized content")
 
     def test_whitespace_normalization_with_mixed_content(self):
         """Test whitespace normalization with mixed line breaks and spaces"""
         content = "Line1\r\nLine2\rLine3\n\n\n\nLine4   with   spaces\t\ttabs"
         result = self.processor.normalize_whitespace(content)
         
-        expected = "Line1\nLine2\nLine3\n\nLine4 with spaces tabs"
+        expected = "Line1\nLine2\nLine3\nLine4 with spaces tabs"
         self.assertEqual(result, expected)
 
     def test_content_hashing_basic(self):
