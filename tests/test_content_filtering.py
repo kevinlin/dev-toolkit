@@ -9,8 +9,8 @@ import email
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
-# Add the src directory to the path so we can import from main.py
-sys.path.insert(0, '.')
+# Add the parent directory to the path so we can import from main.py
+sys.path.insert(0, '..')
 
 from main import ContentProcessor
 
