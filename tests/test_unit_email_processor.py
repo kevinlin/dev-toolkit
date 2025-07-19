@@ -9,10 +9,11 @@ from unittest.mock import patch, MagicMock, Mock
 import sys
 import os
 
-# Add the parent directory to the path so we can import main
+# Add the parent directory to the path so we can import email_exporter
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from main import EmailProcessor, ProcessingStats, ContentProcessor
+from email_exporter import EmailProcessor, ProcessingStats
+from content_processor import ContentProcessor
 
 
 class TestEmailProcessor(unittest.TestCase):

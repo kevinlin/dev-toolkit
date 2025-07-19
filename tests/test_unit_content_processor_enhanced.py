@@ -12,7 +12,7 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from main import ContentProcessor
+from content_processor import ContentProcessor
 
 
 class TestContentProcessorEnhanced(unittest.TestCase):

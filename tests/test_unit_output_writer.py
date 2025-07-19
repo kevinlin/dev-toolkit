@@ -12,10 +12,10 @@ import shutil
 from unittest.mock import patch, mock_open
 import datetime
 
-# Import the OutputWriter class from main.py
+# Import the OutputWriter class from email-exporter.py
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from main import OutputWriter
+from email_exporter import OutputWriter
 
 
 class TestOutputWriter(unittest.TestCase):

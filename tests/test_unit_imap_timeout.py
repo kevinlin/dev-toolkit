@@ -15,7 +15,7 @@ import sys
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from main import IMAPConnectionManager, EmailExporterConfig
+from email_exporter import IMAPConnectionManager, EmailExporterConfig
 
 
 class TestIMAPTimeoutHandling(unittest.TestCase):
@@ -39,7 +39,7 @@ class TestIMAPTimeoutHandling(unittest.TestCase):
         self.assertEqual(self.imap_manager.fetch_timeout, 60)
         self.assertFalse(self.imap_manager.is_connected)
     
-    @patch('main.imaplib.IMAP4_SSL')
+    @patch('email_exporter.imaplib.IMAP4_SSL')
     def test_connection_with_timeout_setting(self, mock_imap_class):
         """Test that socket timeout is set during connection"""
         mock_connection = Mock()

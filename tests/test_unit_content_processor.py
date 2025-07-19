@@ -10,10 +10,10 @@ from unittest.mock import patch, MagicMock
 import sys
 import os
 
-# Add the parent directory to the path so we can import main
+# Add the parent directory to the path so we can import email_exporter
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from main import ContentProcessor
+from content_processor import ContentProcessor
 
 
 class TestContentProcessor(unittest.TestCase):
@@ -25,8 +25,8 @@ class TestContentProcessor(unittest.TestCase):
     
     def test_init_with_html_processing_available(self):
         """Test ContentProcessor initialization when HTML processing libraries are available"""
-        with patch('main.HTML_PROCESSING_AVAILABLE', True):
-            with patch('main.html2text.HTML2Text') as mock_html2text:
+        with patch('content_processor.HTML_PROCESSING_AVAILABLE', True):
+            with patch('content_processor.html2text.HTML2Text') as mock_html2text:
                 mock_converter = MagicMock()
                 mock_html2text.return_value = mock_converter
                 
@@ -45,7 +45,7 @@ class TestContentProcessor(unittest.TestCase):
     
     def test_init_without_html_processing_available(self):
         """Test ContentProcessor initialization when HTML processing libraries are not available"""
-        with patch('main.HTML_PROCESSING_AVAILABLE', False):
+        with patch('content_processor.HTML_PROCESSING_AVAILABLE', False):
             processor = ContentProcessor()
             self.assertIsNone(processor.html_converter)
     
@@ -62,8 +62,8 @@ class TestContentProcessor(unittest.TestCase):
         </html>
         """
         
-        with patch('main.HTML_PROCESSING_AVAILABLE', True):
-            with patch('main.BeautifulSoup') as mock_soup_class:
+        with patch('content_processor.HTML_PROCESSING_AVAILABLE', True):
+            with patch('content_processor.BeautifulSoup') as mock_soup_class:
                 with patch.object(self.processor, 'html_converter') as mock_converter:
                     # Mock BeautifulSoup
                     mock_soup = MagicMock()
@@ -88,7 +88,7 @@ class TestContentProcessor(unittest.TestCase):
         """Test HTML to text conversion when libraries are not available"""
         html_content = "<p>This is <strong>test</strong> content.</p>"
         
-        with patch('main.HTML_PROCESSING_AVAILABLE', False):
+        with patch('content_processor.HTML_PROCESSING_AVAILABLE', False):
             result = self.processor.convert_html_to_text(html_content)
             
             # Should use regex fallback
@@ -104,9 +104,9 @@ class TestContentProcessor(unittest.TestCase):
         """Test HTML to text conversion exception handling"""
         html_content = "<p>Test content</p>"
         
-        with patch('main.HTML_PROCESSING_AVAILABLE', True):
-            with patch('main.BeautifulSoup', side_effect=Exception("Parse error")):
-                with patch('main.re.sub', return_value="fallback result"):
+        with patch('content_processor.HTML_PROCESSING_AVAILABLE', True):
+            with patch('content_processor.BeautifulSoup', side_effect=Exception("Parse error")):
+                with patch('content_processor.re.sub', return_value="fallback result"):
                     result = self.processor.convert_html_to_text(html_content)
                     self.assertEqual(result, "fallback result")
     
@@ -213,7 +213,7 @@ Original message content."""
         content = "Test content"
         
         with patch('builtins.print'):  # Suppress warning print
-            with patch('main.re.sub', side_effect=Exception("Regex error")):
+            with patch('content_processor.re.sub', side_effect=Exception("Regex error")):
                 result = self.processor.normalize_whitespace(content)
                 self.assertEqual(result, "Test content")  # Should return stripped content on error
     

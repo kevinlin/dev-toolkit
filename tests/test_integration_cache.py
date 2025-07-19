@@ -13,10 +13,11 @@ import shutil
 from unittest.mock import Mock, patch, MagicMock
 import email.message
 
-# Import classes from main.py
+# Import classes from email-exporter.py
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from main import CacheManager, EmailProcessor, ProcessingStats, ContentProcessor
+from email_exporter import CacheManager, EmailProcessor, ProcessingStats
+from content_processor import ContentProcessor
 
 
 class TestCacheIntegration(unittest.TestCase):
