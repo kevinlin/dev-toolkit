@@ -4,12 +4,14 @@ A collection of development utilities and testbeds for various Python experiment
 
 ## Email Exporter
 
-The main utility in this toolkit is the Email Exporter - a Python script that extracts and processes sent emails from Gmail, iCloud, or Outlook accounts via IMAP. It processes only sent messages, extracts clean body content while excluding quoted replies and duplicates, and outputs content to timestamped plain text files suitable for AI training.
+The main utility in this toolkit is the Email Exporter - a Python script that extracts and processes sent emails from Gmail, iCloud, or Outlook accounts. It processes only sent messages, extracts clean body content while excluding quoted replies and duplicates, and outputs content to timestamped plain text files suitable for AI training.
 
 ### Features
 
 - **Multi-Provider Support**: Works with Gmail, iCloud, and Outlook accounts
-- **Secure Authentication**: Uses app-specific passwords for enhanced security
+- **Modern Authentication**: 
+  - Gmail & iCloud: IMAP with app-specific passwords
+  - Outlook: OAuth2 with Microsoft Graph API (browser-based, more secure)
 - **Content Filtering**: Excludes quoted replies, forwards, and system-generated messages
 - **Duplicate Detection**: Skips duplicate content using hash comparison
 - **Batch Processing**: Handles large mailboxes with pagination (500 messages per batch)
@@ -22,7 +24,9 @@ The main utility in this toolkit is the Email Exporter - a Python script that ex
 1. Copy the environment template and configure your credentials:
 ```bash
 cp .env.example .env
-# Edit .env with your email provider, address, and app-specific password
+# Edit .env with your email provider and address
+# For Gmail/iCloud: Add your app-specific password  
+# For Outlook: OAuth2 authentication is handled automatically
 ```
 
 2. Run the email exporter:
@@ -30,7 +34,9 @@ cp .env.example .env
 python email_exporter.py
 ```
 
-See `.env.example` for detailed instructions on obtaining app-specific passwords for each provider.
+**For Outlook accounts**: A browser window will open automatically for OAuth2 authentication. No app password needed.
+
+**For Gmail/iCloud accounts**: See `.env.example` for detailed instructions on obtaining app-specific passwords.
 
 ## Setup
 

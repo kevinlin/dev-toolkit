@@ -91,16 +91,21 @@
   - All existing tests continue to pass after refactoring
   - _Requirements: 8.1, 8.2, 8.3, 8.5_
 
-- [x] 11. Add Outlook/Hotmail mail support
-  - Add Outlook provider configuration to EmailExporterConfig.PROVIDER_CONFIGS
-  - Configure IMAP settings for Outlook.com accounts (outlook.office365.com:993, "Sent Items" folder)
-  - Support multiple Outlook domain formats (@outlook.com, @hotmail.com, @live.com, @msn.com)
-  - Implement Outlook-specific folder selection logic with fallback options
-  - Add Outlook cache file support (outlook.cache.json)
-  - Update environment validation to accept "outlook" as valid provider
-  - Add Outlook-specific error handling for common connection issues
-  - Test with Outlook.com account using app-specific password authentication
-  - Update output file naming to support "outlook-yyyyMMdd-HHmmss.txt" format
-  - Write unit tests for Outlook provider configuration and connection handling
-  - Update documentation to reflect Outlook support in requirements and design documents
+- [x] 11. Add Outlook/Hotmail mail support with OAuth2 authentication
+  - ✅ Add Outlook provider configuration to EmailExporterConfig.PROVIDER_CONFIGS
+  - ✅ Implement OAuth2 authentication using Microsoft Graph API (IMAP deprecated by Microsoft)
+  - ✅ Create OutlookOAuth2Client class with MSAL integration for secure authentication
+  - ✅ Support multiple authentication flows: device code flow and authorization code flow
+  - ✅ Implement Microsoft Graph API integration for accessing sent messages
+  - ✅ Create OutlookOAuth2Processor class for Graph API email processing
+  - ✅ Add automatic HTML to text conversion using html2text library
+  - ✅ Support all Outlook domain formats (@outlook.com, @hotmail.com, @live.com, @msn.com)
+  - ✅ Add Outlook cache file support (outlook.cache.json) with message ID tracking
+  - ✅ Update environment validation to make APP_PASSWORD optional for Outlook
+  - ✅ Implement automatic browser-based OAuth2 authentication with token caching
+  - ✅ Add comprehensive error handling for OAuth2 and Graph API operations
+  - ✅ Test OAuth2 integration with proper dependency management
+  - ✅ Update output file naming to support "outlook-yyyyMMdd-HHmmss.txt" format
+  - ✅ Create unified main() function supporting both IMAP (Gmail/iCloud) and OAuth2 (Outlook)
+  - ✅ Update documentation to reflect OAuth2 requirement for Outlook accounts
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 2.1, 2.2, 4.1, 4.2, 6.1, 6.2, 6.3, 8.4_

@@ -2,7 +2,9 @@
 """
 Email Exporter Script
 
-Extracts and processes sent emails from Gmail, iCloud, or Outlook accounts via IMAP.
+Extracts and processes sent emails from Gmail, iCloud, or Outlook accounts.
+- Gmail and iCloud: Uses IMAP with app-specific passwords
+- Outlook: Uses OAuth2 with Microsoft Graph API (due to Basic Auth deprecation)
 Processes only sent messages, extracts clean body content while excluding 
 quoted replies and duplicates, and outputs content to timestamped plain text files.
 """
@@ -30,6 +32,15 @@ except ImportError:
 
 # Import local modules
 from content_processor import ContentProcessor
+
+# Import OAuth2 module for Outlook
+try:
+    from outlook_oauth import create_outlook_oauth_client, OutlookMessage
+    OUTLOOK_OAUTH_AVAILABLE = True
+except ImportError:
+    OUTLOOK_OAUTH_AVAILABLE = False
+    def create_outlook_oauth_client(*args, **kwargs):
+        raise ImportError("OAuth2 dependencies not available. Run: uv pip install msal requests")
 
 import re
 
@@ -167,6 +178,7 @@ class EmailExporterConfig:
     def validate_environment(self) -> None:
         """
         Validate that all required environment variables are present.
+        For Outlook, APP_PASSWORD is optional (OAuth2 is used instead).
         Exits with error message if any required fields are missing.
         """
         # Load environment variables from .env file if dotenv is available
@@ -175,8 +187,8 @@ class EmailExporterConfig:
         else:
             print("Warning: python-dotenv not installed. Reading environment variables directly.")
         
-        # Required environment variables
-        required_vars = ['PROVIDER', 'EMAIL_ADDRESS', 'APP_PASSWORD']
+        # Required environment variables (basic)
+        required_vars = ['PROVIDER', 'EMAIL_ADDRESS']
         missing_vars = []
         
         # Check for missing environment variables
@@ -195,12 +207,25 @@ class EmailExporterConfig:
         # Set configuration values
         self.provider = os.getenv('PROVIDER').strip().lower()
         self.email_address = os.getenv('EMAIL_ADDRESS').strip()
-        self.app_password = os.getenv('APP_PASSWORD').strip()
+        self.app_password = os.getenv('APP_PASSWORD', '').strip()
         
         # Validate provider
         if self.provider not in self.PROVIDER_CONFIGS:
             print(f"Error: Invalid PROVIDER '{self.provider}'. Supported providers: {', '.join(self.PROVIDER_CONFIGS.keys())}")
             sys.exit(1)
+        
+        # Check APP_PASSWORD requirement based on provider
+        if self.provider in ['gmail', 'icloud']:
+            # Traditional providers require app password
+            if not self.app_password:
+                print(f"Error: APP_PASSWORD is required for {self.provider}")
+                print("Please set APP_PASSWORD in your .env file")
+                sys.exit(1)
+        elif self.provider == 'outlook':
+            # Outlook uses OAuth2, app password is optional/ignored
+            if self.app_password:
+                print("ℹ️  Note: APP_PASSWORD is ignored for Outlook (using OAuth2 instead)")
+            print("🔐 Outlook will use OAuth2 authentication (Microsoft Graph API)")
         
         # Set provider-specific configuration
         provider_config = self.PROVIDER_CONFIGS[self.provider]
@@ -883,6 +908,231 @@ class OutputWriter:
         return self.email_count
 
 
+class OutlookOAuth2Processor:
+    """Handles Outlook email processing using OAuth2 and Microsoft Graph API"""
+    
+    def __init__(self, outlook_client, cache_manager: Optional[CacheManager] = None, output_writer: Optional[OutputWriter] = None):
+        self.outlook_client = outlook_client
+        self.stats = ProcessingStats()
+        self.processed_messages = []  # Store processed messages for preview/summary
+        self.content_processor = ContentProcessor()  # Initialize content processor
+        self.cache_manager = cache_manager  # Cache manager for duplicate prevention
+        self.output_writer = output_writer  # Output writer for file management
+    
+    def process_emails(self, batch_size: int = 500, progress_interval: int = 100) -> ProcessingStats:
+        """
+        Process Outlook emails using Microsoft Graph API
+        
+        Args:
+            batch_size: Number of messages to fetch per batch (Graph API handles pagination)
+            progress_interval: Log progress every N processed emails
+            
+        Returns:
+            ProcessingStats: Final processing statistics
+        """
+        print("Starting Outlook email processing using OAuth2...")
+        self.stats.start_processing()
+        
+        # Load existing cache if cache manager is available
+        if self.cache_manager:
+            try:
+                self.cache_manager.load_cache()
+                cache_stats = self.cache_manager.get_cache_stats()
+                print(f"Cache loaded: {cache_stats['total_cached_uids']} previously processed UIDs, {cache_stats['total_cached_content_hashes']} content hashes")
+            except Exception as e:
+                print(f"Warning: Failed to load cache: {str(e)}")
+                self.stats.increment_error_type('cache')
+        
+        # Create output file if output writer is available
+        if self.output_writer:
+            try:
+                self.output_writer.create_output_file()
+            except Exception as e:
+                print(f"Error: Failed to create output file: {str(e)}")
+                self.stats.increment_error_type('output')
+                self.stats.end_processing()
+                return self.stats
+        
+        try:
+            # Get sent messages from Graph API
+            print(f"Fetching sent messages from Microsoft Graph API...")
+            messages = self.outlook_client.get_sent_messages(limit=batch_size)
+            
+            if not messages:
+                print("No messages found in sent folder")
+                self.stats.end_processing()
+                return self.stats
+            
+            print(f"Found {len(messages)} messages in sent folder")
+            
+            # Process messages
+            for i, message in enumerate(messages, 1):
+                try:
+                    # Check if message is already processed using cache
+                    if self.cache_manager and self.cache_manager.is_processed(message.id):
+                        self.stats.skipped_duplicate += 1
+                        continue
+                    
+                    # Process the message
+                    was_retained = self._process_outlook_message(message)
+                    
+                    # Only mark message as processed in cache if it was actually retained
+                    if self.cache_manager and was_retained:
+                        self.cache_manager.mark_processed(message.id)
+                    
+                    # Update total count
+                    self.stats.total_fetched += 1
+                    
+                    # Enhanced progress logging at specified intervals
+                    if self.stats.total_fetched % progress_interval == 0:
+                        print(f"Progress: {self.stats.get_quick_stats()}")
+                        
+                except Exception as e:
+                    print(f"Warning: Error processing message {message.id}: {str(e)}")
+                    self.stats.increment_error_type('processing')
+                    continue
+            
+            # Finalize output file if output writer is available
+            if self.output_writer:
+                try:
+                    self.output_writer.finalize_output()
+                    print(f"Output file successfully written: {self.output_writer.get_output_filename()}")
+                except Exception as e:
+                    print(f"Warning: Failed to finalize output file: {str(e)}")
+                    self.stats.increment_error_type('output')
+            
+            # Save cache after processing if cache manager is available
+            if self.cache_manager:
+                try:
+                    self.cache_manager.save_cache()
+                    print("Cache updated and saved successfully")
+                except Exception as e:
+                    print(f"Warning: Failed to save cache: {str(e)}")
+                    self.stats.increment_error_type('cache')
+            
+            # Mark end of processing and show final summary
+            self.stats.end_processing()
+            print("\nOutlook email processing completed!")
+            print(self.stats.get_summary())
+            
+            # Show preview of first 3 retained messages
+            self._show_message_preview()
+            
+            return self.stats
+            
+        except Exception as e:
+            print(f"Error: Critical failure during Outlook email processing: {str(e)}")
+            self.stats.increment_error_type('processing')
+            self.stats.end_processing()
+            return self.stats
+    
+    def _process_outlook_message(self, message: OutlookMessage) -> bool:
+        """
+        Process a single Outlook message from Graph API
+        
+        Args:
+            message: OutlookMessage from Graph API
+            
+        Returns:
+            bool: True if message was retained, False if filtered out
+        """
+        try:
+            # Extract body content
+            body_content = message.body_content
+            
+            # Additional content processing (HTML to text, etc.)
+            if body_content:
+                # Convert HTML to plain text using content processor
+                body_content = self.content_processor.convert_html_to_text(body_content)
+                
+                # Strip quoted replies
+                body_content = self.content_processor.strip_quoted_replies(body_content)
+                
+                # Normalize whitespace
+                body_content = self.content_processor.normalize_whitespace(body_content)
+            
+            # Validate content quality
+            if not self.content_processor.is_valid_content(body_content):
+                self.stats.skipped_short += 1
+                return False
+            
+            # Check for content-based duplicates
+            if self.cache_manager:
+                existing_hashes = self.cache_manager.get_content_hashes()
+                if self.content_processor.is_content_duplicate(body_content, existing_hashes):
+                    self.stats.skipped_duplicate += 1
+                    content_hash = self.content_processor.hash_content(body_content)
+                    print(f"Skipping duplicate content (hash: {content_hash[:8]}...)")
+                    return False
+            
+            # Store processed message with cleaned content for preview
+            self.stats.retained += 1
+            self.processed_messages.append({
+                'uid': message.id,
+                'subject': message.subject,
+                'date': message.received_datetime,
+                'content': body_content,
+                'word_count': len(body_content.split())
+            })
+            
+            # Write content to output file if output writer is available
+            if self.output_writer:
+                try:
+                    self.output_writer.write_content(body_content)
+                except Exception as e:
+                    print(f"Warning: Failed to write email content to output file: {str(e)}")
+                    self.stats.increment_error_type('output')
+                    # Don't fail processing for output errors, just log and continue
+            
+            # Add content hash to cache for future duplicate detection
+            if self.cache_manager:
+                try:
+                    content_hash = self.content_processor.hash_content(body_content)
+                    if content_hash:
+                        self.cache_manager.add_content_hash(content_hash)
+                except Exception as e:
+                    print(f"Warning: Failed to cache content hash: {str(e)}")
+                    self.stats.increment_error_type('cache')
+            
+            return True  # Message was retained
+                
+        except Exception as e:
+            print(f"Error: Failed to process Outlook message {message.id}: {str(e)}")
+            self.stats.increment_error_type('processing')
+            return False  # Message was not retained due to error
+    
+    def _show_message_preview(self) -> None:
+        """Show enhanced preview of first 3 retained messages for quality check"""
+        if not self.processed_messages:
+            print("\nNo messages retained for preview.")
+            return
+        
+        preview_count = min(3, len(self.processed_messages))
+        print(f"\nPreview of first {preview_count} retained message(s):")
+        print("=" * 80)
+        
+        for i, message in enumerate(self.processed_messages[:preview_count], 1):
+            print(f"\nMessage {i}:")
+            print(f"  ID: {message['uid']}")
+            print(f"  Subject: {message['subject']}")
+            print(f"  Date: {message['date']}")
+            print(f"  Word count: {message['word_count']}")
+            print(f"  Content preview (first 200 characters):")
+            
+            # Show first 200 characters of content with proper line breaks
+            content_preview = message['content'][:200]
+            if len(message['content']) > 200:
+                content_preview += "..."
+            
+            # Format preview with proper indentation
+            lines = content_preview.split('\n')
+            for line in lines:
+                print(f"    {line}")
+            
+            if i < preview_count:
+                print("-" * 60)
+
+
 class EmailProcessor:
     """Handles email fetching, processing, and statistics tracking"""
     
@@ -1187,82 +1437,146 @@ def main():
         print(f"Email provider: {config.provider.upper()}")
         print(f"Ready to connect to {config.provider} account: {config.email_address}")
         
-        # Display IMAP settings for verification
-        imap_server, port, sent_folder = config.get_imap_settings()
-        print(f"IMAP Settings: {imap_server}:{port}")
-        print(f"Target folder: {sent_folder}")
+        # Check if this is Outlook and handle OAuth2 vs IMAP
+        if config.provider == 'outlook':
+            print("🔐 Outlook detected - Using OAuth2 authentication (Microsoft Graph API)")
+            print("⚠️  Note: App passwords are deprecated for Outlook.com accounts")
+            
+            # Check OAuth2 dependencies
+            if not OUTLOOK_OAUTH_AVAILABLE:
+                print("❌ Error: OAuth2 dependencies not available")
+                print("Please install required packages:")
+                print("  uv pip install msal requests")
+                sys.exit(1)
+            
+            # OAuth2 Authentication for Outlook
+            print(f"\n[3/6] OAuth2 Authentication")
+            print("-" * 40)
+            
+            try:
+                outlook_client = create_outlook_oauth_client(config.email_address)
+                
+                print("🔑 Starting OAuth2 authentication...")
+                if not outlook_client.acquire_token_interactive():
+                    print("❌ OAuth2 authentication failed")
+                    print("Please ensure you have a valid Microsoft account and internet connection")
+                    sys.exit(1)
+                
+                # Test connection
+                if not outlook_client.test_connection():
+                    print("❌ Failed to connect to Microsoft Graph API")
+                    sys.exit(1)
+                
+                print("✅ OAuth2 authentication successful!")
+                
+                # Initialize components for Outlook
+                print(f"\n[4/6] Component Initialization")
+                print("-" * 40)
+                output_writer = OutputWriter(config.provider)
+                cache_manager = CacheManager(config.provider)
+                processor = OutlookOAuth2Processor(outlook_client, cache_manager, output_writer)
+                
+                print("All components initialized successfully for Outlook OAuth2")
+                
+                # Process emails using Graph API
+                print(f"\n[5/6] Email Processing (Microsoft Graph API)")
+                print("-" * 40)
+                print(f"Processing emails from account: {config.email_address}")
+                print(f"Using Microsoft Graph API for Outlook")
+                print(f"Progress logging interval: 100 messages")
+                
+                # Process emails using OAuth2/Graph API
+                final_stats = processor.process_emails(batch_size=500, progress_interval=100)
+                
+            except Exception as e:
+                print(f"❌ OAuth2 processing error: {str(e)}")
+                sys.exit(1)
+                
+        else:
+            # Traditional IMAP for Gmail and iCloud
+            print(f"📧 Using IMAP authentication for {config.provider}")
+            
+            # Display IMAP settings for verification
+            imap_server, port, sent_folder = config.get_imap_settings()
+            print(f"IMAP Settings: {imap_server}:{port}")
+            print(f"Target folder: {sent_folder}")
+            
+            # Test IMAP connection with retry logic
+            print(f"\n[3/6] IMAP Connection")
+            print("-" * 40)
+            with IMAPConnectionManager(config) as imap_manager:
+                # Attempt to connect
+                if not imap_manager.connect():
+                    print("Error: Failed to establish IMAP connection after all retry attempts")
+                    print("Please check your credentials and internet connection.")
+                    sys.exit(1)
+                
+                # Select sent mail folder
+                if not imap_manager.select_sent_folder():
+                    print("Error: Failed to select sent mail folder")
+                    print("Please verify that the sent mail folder exists for your provider.")
+                    sys.exit(1)
+                
+                print("IMAP connection and folder selection successful!")
+                
+                # Initialize components
+                print(f"\n[4/6] Component Initialization")
+                print("-" * 40)
+                output_writer = OutputWriter(config.provider)
+                cache_manager = CacheManager(config.provider)
+                processor = EmailProcessor(imap_manager, cache_manager, output_writer)
+                
+                print("All components initialized successfully")
+                
+                # Process emails
+                print(f"\n[5/6] Email Processing (IMAP)")
+                print("-" * 40)
+                print(f"Processing emails from account: {config.email_address}")
+                print(f"Batch size: 500 messages")
+                print(f"Progress logging interval: 100 messages")
+                
+                # Process emails with batch size of 500 and progress logging every 100 emails
+                final_stats = processor.process_emails(batch_size=500, progress_interval=100)
         
-        # Test IMAP connection with retry logic
-        print(f"\n[3/6] IMAP Connection")
+        # Final summary and output information
+        print(f"\n[6/6] Final Summary")
         print("-" * 40)
-        with IMAPConnectionManager(config) as imap_manager:
-            # Attempt to connect
-            if not imap_manager.connect():
-                print("Error: Failed to establish IMAP connection after all retry attempts")
-                print("Please check your credentials and internet connection.")
-                sys.exit(1)
-            
-            # Select sent mail folder
-            if not imap_manager.select_sent_folder():
-                print("Error: Failed to select sent mail folder")
-                print("Please verify that the sent mail folder exists for your provider.")
-                sys.exit(1)
-            
-            print("IMAP connection and folder selection successful!")
-            
-            # Initialize components
-            print(f"\n[4/6] Component Initialization")
-            print("-" * 40)
-            output_writer = OutputWriter(config.provider)
-            cache_manager = CacheManager(config.provider)
-            processor = EmailProcessor(imap_manager, cache_manager, output_writer)
-            
-            print("All components initialized successfully")
-            
-            # Process emails
-            print(f"\n[5/6] Email Processing")
-            print("-" * 40)
-            print(f"Processing emails from account: {config.email_address}")
-            print(f"Batch size: 500 messages")
-            print(f"Progress logging interval: 100 messages")
-            
-            # Process emails with batch size of 500 and progress logging every 100 emails
-            final_stats = processor.process_emails(batch_size=500, progress_interval=100)
-            
-            # Final summary and output information
-            print(f"\n[6/6] Final Summary")
-            print("-" * 40)
-            
-            # Calculate total script execution time
-            script_end_time = datetime.datetime.now()
-            total_duration = script_end_time - script_start_time
-            total_seconds = int(total_duration.total_seconds())
-            hours, remainder = divmod(total_seconds, 3600)
-            minutes, seconds = divmod(remainder, 60)
-            
-            if hours > 0:
-                duration_str = f"{hours}h {minutes}m {seconds}s"
-            elif minutes > 0:
-                duration_str = f"{minutes}m {seconds}s"
-            else:
-                duration_str = f"{seconds}s"
-            
-            print("Email processing completed successfully!")
-            print(f"Total script execution time: {duration_str}")
-            print(f"Output saved to: {output_writer.get_output_filename()}")
-            print(f"Connected email address: {config.email_address}")
-            
-            # Show success status based on results
-            if final_stats.retained > 0:
-                print(f"✓ Success: {final_stats.retained} emails processed and saved")
-            else:
-                print("⚠ Warning: No emails were retained (check filters and content)")
-            
-            if final_stats.errors > 0:
-                print(f"⚠ Note: {final_stats.errors} errors occurred during processing")
-            
-            print("\nConnection will be automatically cleaned up when exiting context manager.")
-            print("=" * 80)
+        
+        # Calculate total script execution time
+        script_end_time = datetime.datetime.now()
+        total_duration = script_end_time - script_start_time
+        total_seconds = int(total_duration.total_seconds())
+        hours, remainder = divmod(total_seconds, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        
+        if hours > 0:
+            duration_str = f"{hours}h {minutes}m {seconds}s"
+        elif minutes > 0:
+            duration_str = f"{minutes}m {seconds}s"
+        else:
+            duration_str = f"{seconds}s"
+        
+        print("Email processing completed successfully!")
+        print(f"Total script execution time: {duration_str}")
+        
+        if config.provider == 'outlook':
+            print(f"✅ Used OAuth2 authentication for Outlook")
+        else:
+            print(f"✅ Used IMAP authentication for {config.provider}")
+        
+        print(f"Output saved to: {output_writer.get_output_filename()}")
+        print(f"Connected email address: {config.email_address}")
+        
+        # Show success status based on results
+        if final_stats.retained > 0:
+            print(f"✓ Success: {final_stats.retained} emails processed and saved")
+        else:
+            print("⚠ Warning: No emails were retained (check filters and content)")
+        
+        if final_stats.errors > 0:
+            print(f"⚠ Note: {final_stats.errors} errors occurred during processing")
+        
+        print("=" * 80)
         
     except KeyboardInterrupt:
         print("\n" + "=" * 80)

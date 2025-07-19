@@ -77,11 +77,22 @@ The script will:
 ---
 
 ## Environment Configuration (`.env`)
+
+### Gmail and iCloud (IMAP with App Passwords)
 ```dotenv
-PROVIDER=gmail             # or icloud or outlook
+PROVIDER=gmail             # or icloud
 EMAIL_ADDRESS=you@example.com
 APP_PASSWORD=yourapppassword123
 ```
+
+### Outlook (OAuth2 Authentication)
+```dotenv
+PROVIDER=outlook
+EMAIL_ADDRESS=you@outlook.com
+# APP_PASSWORD is ignored for Outlook (OAuth2 is used automatically)
+```
+
+**Note for Outlook users:** Microsoft has deprecated Basic Authentication (app passwords) for Outlook.com accounts as of September 2024. The email exporter automatically uses OAuth2 authentication for Outlook accounts, which provides better security and doesn't require app passwords.
 
 ---
 
