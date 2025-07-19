@@ -434,6 +434,120 @@ This is a test message with UTF-8 encoding."""
                 mock_normalize.assert_called_once_with("cleaned content")
                 self.assertEqual(result, "normalized content")
 
+    def test_whitespace_normalization_with_mixed_content(self):
+        """Test whitespace normalization with mixed line breaks and spaces"""
+        content = "Line1\r\nLine2\rLine3\n\n\n\nLine4   with   spaces\t\ttabs"
+        result = self.processor.normalize_whitespace(content)
+        
+        expected = "Line1\nLine2\nLine3\n\nLine4 with spaces tabs"
+        self.assertEqual(result, expected)
+
+    def test_content_hashing_basic(self):
+        """Test basic content hashing functionality"""
+        content = "This is a test email with some content."
+        hash_result = self.processor.hash_content(content)
+        
+        # Should return a valid SHA-256 hash (64 characters)
+        self.assertEqual(len(hash_result), 64)
+        self.assertIsInstance(hash_result, str)
+        self.assertTrue(all(c in '0123456789abcdef' for c in hash_result))
+    
+    def test_content_hashing_consistency(self):
+        """Test that same content produces same hash"""
+        content = "This is a test email with some content."
+        hash1 = self.processor.hash_content(content)
+        hash2 = self.processor.hash_content(content)
+        
+        self.assertEqual(hash1, hash2)
+    
+    def test_content_hashing_normalization(self):
+        """Test that content is normalized before hashing"""
+        content1 = "This  is   a test\n\n\nemail."
+        content2 = "This is a test\n\nemail."
+        
+        hash1 = self.processor.hash_content(content1)
+        hash2 = self.processor.hash_content(content2)
+        
+        # Should be the same after normalization
+        self.assertEqual(hash1, hash2)
+    
+    def test_content_hashing_case_insensitive(self):
+        """Test that content hashing is case insensitive"""
+        content1 = "This Is A Test Email."
+        content2 = "this is a test email."
+        
+        hash1 = self.processor.hash_content(content1)
+        hash2 = self.processor.hash_content(content2)
+        
+        # Should be the same regardless of case
+        self.assertEqual(hash1, hash2)
+    
+    def test_content_hashing_empty_content(self):
+        """Test content hashing with empty content"""
+        self.assertEqual(self.processor.hash_content(""), "")
+        self.assertEqual(self.processor.hash_content(None), "")
+        self.assertEqual(self.processor.hash_content("   \n\t   "), "")
+    
+    def test_content_hashing_different_content(self):
+        """Test that different content produces different hashes"""
+        content1 = "This is the first email."
+        content2 = "This is the second email."
+        
+        hash1 = self.processor.hash_content(content1)
+        hash2 = self.processor.hash_content(content2)
+        
+        self.assertNotEqual(hash1, hash2)
+    
+    def test_is_content_duplicate_basic(self):
+        """Test basic content duplicate detection"""
+        content = "This is a test email with some content."
+        content_hash = self.processor.hash_content(content)
+        existing_hashes = {content_hash}
+        
+        # Should detect as duplicate
+        self.assertTrue(self.processor.is_content_duplicate(content, existing_hashes))
+        
+        # Different content should not be duplicate
+        different_content = "This is a different email."
+        self.assertFalse(self.processor.is_content_duplicate(different_content, existing_hashes))
+    
+    def test_is_content_duplicate_empty_hashes(self):
+        """Test content duplicate detection with empty hash set"""
+        content = "This is a test email."
+        existing_hashes = set()
+        
+        self.assertFalse(self.processor.is_content_duplicate(content, existing_hashes))
+    
+    def test_is_content_duplicate_empty_content(self):
+        """Test content duplicate detection with empty content"""
+        existing_hashes = {"somehash"}
+        
+        self.assertFalse(self.processor.is_content_duplicate("", existing_hashes))
+        self.assertFalse(self.processor.is_content_duplicate(None, existing_hashes))
+        self.assertFalse(self.processor.is_content_duplicate("   \n\t   ", existing_hashes))
+    
+    def test_is_content_duplicate_normalized_comparison(self):
+        """Test that content duplicate detection normalizes content before comparison"""
+        content1 = "This  is   a test\n\n\nemail."
+        content2 = "This is a test\n\nemail."
+        
+        hash1 = self.processor.hash_content(content1)
+        existing_hashes = {hash1}
+        
+        # content2 should be detected as duplicate after normalization
+        self.assertTrue(self.processor.is_content_duplicate(content2, existing_hashes))
+    
+    def test_is_content_duplicate_case_insensitive(self):
+        """Test that content duplicate detection is case insensitive"""
+        content1 = "This Is A Test Email."
+        content2 = "this is a test email."
+        
+        hash1 = self.processor.hash_content(content1)
+        existing_hashes = {hash1}
+        
+        # content2 should be detected as duplicate despite case differences
+        self.assertTrue(self.processor.is_content_duplicate(content2, existing_hashes))
+
 
 if __name__ == '__main__':
     unittest.main()

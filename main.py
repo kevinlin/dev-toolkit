@@ -15,6 +15,7 @@ import email
 import email.message
 import json
 import datetime
+import hashlib  # Add hashlib import for content hashing
 from dataclasses import dataclass
 from typing import Optional, Iterator, List, Set
 
@@ -1055,10 +1056,72 @@ class ContentProcessor:
         except Exception as e:
             print(f"Warning: Error checking if message is system-generated: {str(e)}")
             return False
+    
+    def hash_content(self, content: str) -> str:
+        """
+        Generate a SHA-256 hash of normalized content for duplicate detection.
+        
+        Args:
+            content: Content to hash
+            
+        Returns:
+            str: SHA-256 hash of the content
+        """
+        if not content:
+            return ""
+        
+        try:
+            # Normalize content before hashing to ensure consistent comparison
+            normalized_content = self.normalize_whitespace(content)
+            
+            # Convert to lowercase and remove extra whitespace for better duplicate detection
+            # This helps catch duplicates that might have minor formatting differences
+            content_for_hashing = re.sub(r'\s+', ' ', normalized_content.lower().strip())
+            
+            # Check if content is empty after normalization
+            if not content_for_hashing:
+                return ""
+            
+            # Generate SHA-256 hash
+            content_bytes = content_for_hashing.encode('utf-8')
+            hash_object = hashlib.sha256(content_bytes)
+            content_hash = hash_object.hexdigest()
+            
+            return content_hash
+            
+        except Exception as e:
+            print(f"Warning: Error hashing content: {str(e)}")
+            return ""
+    
+    def is_content_duplicate(self, content: str, existing_hashes: Set[str]) -> bool:
+        """
+        Check if content is a duplicate based on content hash comparison.
+        
+        Args:
+            content: Content to check for duplication
+            existing_hashes: Set of existing content hashes
+            
+        Returns:
+            bool: True if content is a duplicate, False otherwise
+        """
+        if not content or not content.strip():
+            return False
+        
+        try:
+            content_hash = self.hash_content(content)
+            
+            if not content_hash:
+                return False
+            
+            return content_hash in existing_hashes
+            
+        except Exception as e:
+            print(f"Warning: Error checking content duplicate: {str(e)}")
+            return False
 
 
 class CacheManager:
-    """Manages UID caching for duplicate prevention"""
+    """Manages UID caching and content hash tracking for duplicate prevention"""
     
     def __init__(self, provider: str, output_dir: str = "output"):
         """
@@ -1072,9 +1135,11 @@ class CacheManager:
         self.output_dir = output_dir
         self.cache_file = os.path.join(output_dir, f"{self.provider}.cache.json")
         self.processed_uids: Set[str] = set()
+        self.content_hashes: Set[str] = set()  # Add content hash tracking
         self.cache_metadata = {
             "last_updated": None,
-            "total_processed": 0
+            "total_processed": 0,
+            "total_content_hashes": 0  # Add content hash count tracking
         }
         
         # Ensure output directory exists
@@ -1112,11 +1177,19 @@ class CacheManager:
                 else:
                     raise ValueError("processed_uids must be a list")
                 
+                # Load content hashes
+                content_hashes = cache_data.get('content_hashes', [])
+                if isinstance(content_hashes, list):
+                    self.content_hashes = set(content_hashes)
+                else:
+                    raise ValueError("content_hashes must be a list")
+                
                 # Load metadata
                 self.cache_metadata['last_updated'] = cache_data.get('last_updated')
                 self.cache_metadata['total_processed'] = cache_data.get('total_processed', len(self.processed_uids))
+                self.cache_metadata['total_content_hashes'] = cache_data.get('total_content_hashes', len(self.content_hashes))
                 
-                print(f"Loaded cache with {len(self.processed_uids)} processed UIDs")
+                print(f"Loaded cache with {len(self.processed_uids)} processed UIDs and {len(self.content_hashes)} content hashes")
                 if self.cache_metadata['last_updated']:
                     print(f"Cache last updated: {self.cache_metadata['last_updated']}")
                 
@@ -1132,9 +1205,11 @@ class CacheManager:
     def _create_new_cache(self) -> None:
         """Create a new empty cache"""
         self.processed_uids = set()
+        self.content_hashes = set()
         self.cache_metadata = {
             "last_updated": None,
-            "total_processed": 0
+            "total_processed": 0,
+            "total_content_hashes": 0
         }
         print("Initialized new empty cache")
     
@@ -1147,12 +1222,15 @@ class CacheManager:
             # Update metadata
             self.cache_metadata['last_updated'] = datetime.datetime.now().isoformat()
             self.cache_metadata['total_processed'] = len(self.processed_uids)
+            self.cache_metadata['total_content_hashes'] = len(self.content_hashes)
             
             # Prepare cache data
             cache_data = {
                 'processed_uids': sorted(list(self.processed_uids)),  # Sort for consistency
+                'content_hashes': sorted(list(self.content_hashes)), # Sort for consistency
                 'last_updated': self.cache_metadata['last_updated'],
-                'total_processed': self.cache_metadata['total_processed']
+                'total_processed': self.cache_metadata['total_processed'],
+                'total_content_hashes': self.cache_metadata['total_content_hashes']
             }
             
             # Write to file with atomic operation (write to temp file first)
@@ -1172,7 +1250,7 @@ class CacheManager:
             os.rename(temp_file, self.cache_file)
             
             print(f"Cache saved successfully to {self.cache_file}")
-            print(f"Total cached UIDs: {len(self.processed_uids)}")
+            print(f"Total cached UIDs: {len(self.processed_uids)}, Total content hashes: {len(self.content_hashes)}")
             
         except Exception as e:
             print(f"Error saving cache to {self.cache_file}: {str(e)}")
@@ -1206,6 +1284,37 @@ class CacheManager:
         """
         self.processed_uids.add(uid)
     
+    def is_content_duplicate(self, content_hash: str) -> bool:
+        """
+        Check if a content hash has been processed before.
+        
+        Args:
+            content_hash: Content hash to check
+            
+        Returns:
+            bool: True if content hash is in cache, False otherwise
+        """
+        return content_hash in self.content_hashes
+    
+    def add_content_hash(self, content_hash: str) -> None:
+        """
+        Add a content hash to the cache.
+        
+        Args:
+            content_hash: Content hash to add to cache
+        """
+        if content_hash:  # Only add non-empty hashes
+            self.content_hashes.add(content_hash)
+    
+    def get_content_hashes(self) -> Set[str]:
+        """
+        Get the set of all cached content hashes.
+        
+        Returns:
+            Set[str]: Set of cached content hashes
+        """
+        return self.content_hashes.copy()
+    
     def get_cache_stats(self) -> dict:
         """
         Get cache statistics.
@@ -1215,6 +1324,7 @@ class CacheManager:
         """
         return {
             'total_cached_uids': len(self.processed_uids),
+            'total_cached_content_hashes': len(self.content_hashes),
             'last_updated': self.cache_metadata['last_updated'],
             'cache_file': self.cache_file,
             'provider': self.provider
@@ -1248,7 +1358,7 @@ class EmailProcessor:
         if self.cache_manager:
             self.cache_manager.load_cache()
             cache_stats = self.cache_manager.get_cache_stats()
-            print(f"Cache loaded: {cache_stats['total_cached_uids']} previously processed UIDs")
+            print(f"Cache loaded: {cache_stats['total_cached_uids']} previously processed UIDs, {cache_stats['total_cached_content_hashes']} content hashes")
         
         try:
             # Process emails in batches
@@ -1347,6 +1457,15 @@ class EmailProcessor:
                 self.stats.skipped_short += 1
                 return False
             
+            # Check for content-based duplicates
+            if self.cache_manager:
+                existing_hashes = self.cache_manager.get_content_hashes()
+                if self.content_processor.is_content_duplicate(body_content, existing_hashes):
+                    self.stats.skipped_duplicate += 1
+                    content_hash = self.content_processor.hash_content(body_content)
+                    print(f"Skipping duplicate content (hash: {content_hash[:8]}...)")
+                    return False
+            
             # Get basic message info
             subject = message.get('Subject', 'No Subject')
             date = message.get('Date', 'No Date')
@@ -1360,6 +1479,12 @@ class EmailProcessor:
                 'content': body_content,
                 'word_count': len(body_content.split())
             })
+            
+            # Add content hash to cache for future duplicate detection
+            if self.cache_manager:
+                content_hash = self.content_processor.hash_content(body_content)
+                if content_hash:
+                    self.cache_manager.add_content_hash(content_hash)
             
             return True  # Message was retained
                 

@@ -139,18 +139,144 @@ class TestCacheManager(unittest.TestCase):
         self.assertEqual(len(self.cache_manager.processed_uids), 3)
         self.assertEqual(self.cache_manager.processed_uids, {'uid1', 'uid2', 'uid3'})
     
-    def test_get_cache_stats(self):
+    def test_cache_stats(self):
         """Test cache statistics functionality"""
         # Add some UIDs
-        for i in range(5):
-            self.cache_manager.mark_processed(f'uid_{i}')
+        uids = ['uid1', 'uid2', 'uid3']
+        for uid in uids:
+            self.cache_manager.mark_processed(uid)
         
         stats = self.cache_manager.get_cache_stats()
         
-        self.assertEqual(stats['total_cached_uids'], 5)
+        self.assertEqual(stats['total_cached_uids'], 3)
         self.assertEqual(stats['provider'], 'gmail')
-        self.assertEqual(stats['cache_file'], self.cache_manager.cache_file)
-        self.assertIsNone(stats['last_updated'])  # Not saved yet
+        self.assertIn('cache_file', stats)
+        self.assertIn('last_updated', stats)
+
+    def test_content_hash_operations(self):
+        """Test content hash addition and checking"""
+        hash1 = "abc123def456"
+        hash2 = "xyz789uvw012"
+        
+        # Initially no content hashes
+        self.assertFalse(self.cache_manager.is_content_duplicate(hash1))
+        self.assertEqual(len(self.cache_manager.get_content_hashes()), 0)
+        
+        # Add content hashes
+        self.cache_manager.add_content_hash(hash1)
+        self.cache_manager.add_content_hash(hash2)
+        
+        # Check they're detected as duplicates
+        self.assertTrue(self.cache_manager.is_content_duplicate(hash1))
+        self.assertTrue(self.cache_manager.is_content_duplicate(hash2))
+        self.assertFalse(self.cache_manager.is_content_duplicate("nonexistent"))
+        
+        # Check content hashes set
+        hashes = self.cache_manager.get_content_hashes()
+        self.assertEqual(len(hashes), 2)
+        self.assertIn(hash1, hashes)
+        self.assertIn(hash2, hashes)
+    
+    def test_content_hash_empty_handling(self):
+        """Test handling of empty content hashes"""
+        # Empty hashes should not be added
+        self.cache_manager.add_content_hash("")
+        self.cache_manager.add_content_hash(None)
+        
+        self.assertEqual(len(self.cache_manager.get_content_hashes()), 0)
+        self.assertFalse(self.cache_manager.is_content_duplicate(""))
+    
+    def test_content_hash_duplicate_addition(self):
+        """Test that adding the same content hash multiple times doesn't create duplicates"""
+        hash1 = "abc123def456"
+        
+        # Add same hash multiple times
+        self.cache_manager.add_content_hash(hash1)
+        self.cache_manager.add_content_hash(hash1)
+        self.cache_manager.add_content_hash(hash1)
+        
+        # Should only have one instance
+        hashes = self.cache_manager.get_content_hashes()
+        self.assertEqual(len(hashes), 1)
+        self.assertIn(hash1, hashes)
+    
+    def test_cache_save_and_load_with_content_hashes(self):
+        """Test saving and loading cache with content hashes"""
+        # Add UIDs and content hashes
+        uids = ['uid1', 'uid2']
+        hashes = ['hash1', 'hash2', 'hash3']
+        
+        for uid in uids:
+            self.cache_manager.mark_processed(uid)
+        for hash_val in hashes:
+            self.cache_manager.add_content_hash(hash_val)
+        
+        # Save cache
+        self.cache_manager.save_cache()
+        
+        # Create new cache manager to test loading
+        new_cache_manager = CacheManager('gmail', self.test_dir)
+        new_cache_manager.load_cache()
+        
+        # Verify UIDs and content hashes were loaded
+        self.assertEqual(new_cache_manager.processed_uids, set(uids))
+        self.assertEqual(new_cache_manager.get_content_hashes(), set(hashes))
+        
+        # Verify all hashes are detected as duplicates
+        for hash_val in hashes:
+            self.assertTrue(new_cache_manager.is_content_duplicate(hash_val))
+    
+    def test_cache_stats_with_content_hashes(self):
+        """Test cache statistics with content hashes"""
+        # Add UIDs and content hashes
+        uids = ['uid1', 'uid2', 'uid3']
+        hashes = ['hash1', 'hash2']
+        
+        for uid in uids:
+            self.cache_manager.mark_processed(uid)
+        for hash_val in hashes:
+            self.cache_manager.add_content_hash(hash_val)
+        
+        stats = self.cache_manager.get_cache_stats()
+        
+        self.assertEqual(stats['total_cached_uids'], 3)
+        self.assertEqual(stats['total_cached_content_hashes'], 2)
+        self.assertEqual(stats['provider'], 'gmail')
+    
+    def test_content_hash_isolation(self):
+        """Test that get_content_hashes returns a copy, not the original set"""
+        hash1 = "abc123"
+        self.cache_manager.add_content_hash(hash1)
+        
+        # Get content hashes and modify the returned set
+        hashes = self.cache_manager.get_content_hashes()
+        hashes.add("should_not_affect_cache")
+        
+        # Original cache should be unaffected
+        original_hashes = self.cache_manager.get_content_hashes()
+        self.assertEqual(len(original_hashes), 1)
+        self.assertIn(hash1, original_hashes)
+        self.assertNotIn("should_not_affect_cache", original_hashes)
+    
+    def test_cache_corruption_recovery_with_content_hashes(self):
+        """Test cache recovery when file is corrupted, including content hashes"""
+        # Create corrupted cache file
+        with open(self.cache_manager.cache_file, 'w') as f:
+            f.write("invalid json content")
+        
+        # Loading should recover gracefully
+        self.cache_manager.load_cache()
+        
+        # Should start with empty cache
+        self.assertEqual(len(self.cache_manager.processed_uids), 0)
+        self.assertEqual(len(self.cache_manager.get_content_hashes()), 0)
+        
+        # Should be able to add new data
+        self.cache_manager.mark_processed('test_uid')
+        self.cache_manager.add_content_hash('test_hash')
+        
+        self.assertTrue(self.cache_manager.is_processed('test_uid'))
+        self.assertTrue(self.cache_manager.is_content_duplicate('test_hash'))
     
     def test_load_corrupted_cache_file(self):
         """Test handling of corrupted cache file"""

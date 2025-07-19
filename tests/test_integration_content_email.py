@@ -22,6 +22,7 @@ class TestContentProcessorEmailProcessorIntegration(unittest.TestCase):
         """Set up test fixtures"""
         self.mock_imap_manager = MagicMock()
         self.email_processor = EmailProcessor(self.mock_imap_manager)
+        self.content_processor = ContentProcessor()
     
     def create_test_message(self, subject, from_addr, content, content_type='text/plain'):
         """Helper to create test email messages"""
@@ -279,6 +280,117 @@ Please find the attached project timeline for your review."""
         self.assertIn('Valid Message 2', subjects)
         self.assertNotIn('Auto-Reply: Out of Office', subjects)
         self.assertNotIn('Short', subjects)
+
+    def test_content_duplicate_detection_basic(self):
+        """Test basic content duplicate detection during email processing"""
+        # Create two emails with identical content
+        identical_content = "This is an identical email body content for testing duplicate detection with enough words to pass validation."
+        
+        email1 = self.create_test_message("subject1", "colleague@company.com", identical_content)
+        email2 = self.create_test_message("subject2", "colleague@company.com", identical_content)  # Different subject, same content
+        
+        # Test that content processor detects duplicates
+        hash1 = self.content_processor.hash_content(identical_content)
+        hash2 = self.content_processor.hash_content(identical_content)
+        
+        self.assertEqual(hash1, hash2)
+        
+        # Test with existing hashes
+        existing_hashes = {hash1}
+        self.assertTrue(self.content_processor.is_content_duplicate(identical_content, existing_hashes))
+    
+    def test_content_duplicate_with_formatting_differences(self):
+        """Test that content duplicates are detected despite formatting differences"""
+        content1 = "This is an email with  extra   spaces\n\n\nand multiple line breaks for testing purposes."
+        content2 = "This is an email with extra spaces\nand multiple line breaks for testing purposes."
+        
+        # Should produce same hash after normalization
+        hash1 = self.content_processor.hash_content(content1)
+        hash2 = self.content_processor.hash_content(content2)
+        
+        self.assertEqual(hash1, hash2)
+        
+        # Test duplicate detection
+        existing_hashes = {hash1}
+        self.assertTrue(self.content_processor.is_content_duplicate(content2, existing_hashes))
+    
+    def test_content_duplicate_case_insensitive(self):
+        """Test that content duplicate detection is case insensitive"""
+        content1 = "This Is An Email With Different Case Letters For Testing Duplicate Detection Properly."
+        content2 = "this is an email with different case letters for testing duplicate detection properly."
+        
+        # Should produce same hash regardless of case
+        hash1 = self.content_processor.hash_content(content1)
+        hash2 = self.content_processor.hash_content(content2)
+        
+        self.assertEqual(hash1, hash2)
+        
+        # Test duplicate detection
+        existing_hashes = {hash1}
+        self.assertTrue(self.content_processor.is_content_duplicate(content2, existing_hashes))
+    
+    def test_content_duplicate_with_quoted_replies(self):
+        """Test content duplicate detection after quoted reply stripping"""
+        original_content = "This is the original email content for testing duplicate detection after reply stripping."
+        
+        content_with_reply = f"""{original_content}
+
+On 2024-01-15, someone wrote:
+> This is a quoted reply that should be stripped
+> when processing the email content
+"""
+        
+        # Both should produce same hash after processing
+        hash1 = self.content_processor.hash_content(original_content)
+        
+        # Process content with reply through full pipeline
+        cleaned_content = self.content_processor.strip_quoted_replies(content_with_reply)
+        normalized_content = self.content_processor.normalize_whitespace(cleaned_content)
+        hash2 = self.content_processor.hash_content(normalized_content)
+        
+        self.assertEqual(hash1, hash2)
+        
+        # Test duplicate detection
+        existing_hashes = {hash1}
+        self.assertTrue(self.content_processor.is_content_duplicate(normalized_content, existing_hashes))
+    
+    def test_non_duplicate_content(self):
+        """Test that genuinely different content is not detected as duplicate"""
+        content1 = "This is the first unique email content for testing purposes with sufficient words."
+        content2 = "This is the second unique email content for testing purposes with sufficient words."
+        
+        # Should produce different hashes
+        hash1 = self.content_processor.hash_content(content1)
+        hash2 = self.content_processor.hash_content(content2)
+        
+        self.assertNotEqual(hash1, hash2)
+        
+        # Test duplicate detection
+        existing_hashes = {hash1}
+        self.assertFalse(self.content_processor.is_content_duplicate(content2, existing_hashes))
+    
+    def test_content_hash_stability(self):
+        """Test that content hashes remain stable across multiple calls"""
+        content = "This is a test email content for verifying hash stability across multiple generations."
+        
+        # Generate multiple hashes
+        hashes = [self.content_processor.hash_content(content) for _ in range(5)]
+        
+        # All hashes should be identical
+        for hash_val in hashes:
+            self.assertEqual(hash_val, hashes[0])
+            self.assertEqual(len(hash_val), 64)  # SHA-256 hash length
+    
+    def test_empty_content_handling(self):
+        """Test handling of empty or invalid content in hashing"""
+        self.assertEqual(self.content_processor.hash_content(""), "")
+        self.assertEqual(self.content_processor.hash_content(None), "")
+        self.assertEqual(self.content_processor.hash_content("   \n\t   "), "")
+        
+        # Test duplicate detection with empty content
+        existing_hashes = {"somehash"}
+        self.assertFalse(self.content_processor.is_content_duplicate("", existing_hashes))
+        self.assertFalse(self.content_processor.is_content_duplicate(None, existing_hashes))
 
 
 if __name__ == '__main__':
