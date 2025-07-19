@@ -1,45 +1,52 @@
-# Email Exporter Unit Tests
+# Email Exporter Tests
 
-This directory contains comprehensive unit tests for the Email Exporter application, specifically focusing on the content extraction and HTML processing functionality implemented in Task 4.
+This directory contains comprehensive tests for the Email Exporter application, organized with clear distinctions between unit and integration tests.
 
 ## Test Structure
 
-### Test Files
+The tests are organized using clear naming conventions to distinguish between unit and integration tests:
 
-- **`test_content_processor.py`** - Tests for the `ContentProcessor` class
-  - HTML to text conversion
+### Unit Tests (Fast, Isolated)
+
+- **`test_unit_content_processor.py`** - Unit tests for the `ContentProcessor` class
+  - HTML to text conversion (with mocked dependencies)
   - Quoted reply stripping
   - Whitespace normalization
   - Content validation
   - System-generated message detection
   - Email body extraction from multipart messages
 
-- **`test_email_processor.py`** - Tests for the `EmailProcessor` class changes
-  - Integration with `ContentProcessor`
+- **`test_unit_email_processor.py`** - Unit tests for the `EmailProcessor` class
+  - Individual method testing with mocks
   - Message processing workflow
   - Statistics tracking
   - Error handling
+  - Batch processing logic
 
-- **`test_integration.py`** - End-to-end integration tests
+- **`test_unit_cache_manager.py`** - Unit tests for the `CacheManager` class
+  - Cache operations and UID tracking
+  - File I/O operations
+  - Duplicate detection
+  - Error handling and recovery
+
+### Integration Tests (Slower, End-to-End)
+
+- **`test_integration_content_email.py`** - Integration tests for ContentProcessor and EmailProcessor interaction
   - Complete processing workflows
   - Multi-message batch processing
-  - Real-world scenarios
+  - Real-world email scenarios
 
-- **`test_content_filtering.py`** - Standalone content filtering validation tests
-  - Word count validation (minimum 20 words)
-  - System-generated content detection (auto-replies, delivery notifications, etc.)
-  - Quoted reply and forwarded text stripping
-  - HTML to text conversion validation
-  - Whitespace normalization testing
-  - Content quality validation
+- **`test_integration_cache.py`** - Integration tests for cache functionality with email processing
+  - Cache integration with EmailProcessor
+  - Duplicate detection during processing
+  - End-to-end caching workflow
 
-- **`test_integration_filtering.py`** - Integration tests for content filtering pipeline
-  - End-to-end email processing with filtering
-  - Multi-message processing with various content types
-  - Statistics validation for filtering results
-  - Real-world email scenarios including HTML, quoted replies, and system messages
+- **`test_integration_email_processor.py`** - Full email processing workflow integration tests
+  - Complete email processing pipelines
+  - HTML and multipart email handling
+  - Real-world scenarios with minimal mocking
 
-- **`run_tests.py`** - Test runner script
+The tests are designed to run with pytest for better test discovery, reporting, and coverage analysis.
 
 ### Test Coverage
 
@@ -86,103 +93,116 @@ Make sure you have the required dependencies installed:
 source .venv/bin/activate
 
 # Install dependencies (if not already installed)
-uv pip install beautifulsoup4 html2text python-dotenv
+pip install beautifulsoup4 html2text python-dotenv pytest pytest-cov
 ```
 
 ### Running All Tests
 
 ```bash
 # From the project root directory
-.venv/bin/python tests/run_tests.py
+pytest
+
+# With coverage report
+pytest --cov=src --cov-report=term-missing
+
+# With verbose output
+pytest -v
 ```
 
-### Running Specific Test Suites
+### Running Specific Test Types
 
 ```bash
-# Content processor tests only
-.venv/bin/python tests/run_tests.py content
+# Run only unit tests (fast, isolated)
+pytest tests/test_unit_* -v
 
-# Email processor tests only
-.venv/bin/python tests/run_tests.py processor
+# Run only integration tests (slower, end-to-end)
+pytest tests/test_integration_* -v
 
-# Integration tests only
-.venv/bin/python tests/run_tests.py integration
+# Run specific test files
+pytest tests/test_unit_content_processor.py
+pytest tests/test_unit_email_processor.py
+pytest tests/test_unit_cache_manager.py
+pytest tests/test_integration_content_email.py
+pytest tests/test_integration_cache.py
+pytest tests/test_integration_email_processor.py
 
-# Processing stats tests only
-.venv/bin/python tests/run_tests.py stats
+# Run tests by pattern (e.g., all tests containing "content")
+pytest -k "content"
+
+# Run tests by markers (if you add pytest markers)
+pytest -m "unit"
+pytest -m "integration"
 ```
 
 ### Running Individual Test Files
 
 ```bash
 # Run a specific test file
-.venv/bin/python -m unittest tests.test_content_processor
-
-# Run the new content filtering test file directly
-cd tests && python test_content_filtering.py
-
-# Run the new integration filtering test file directly
-cd tests && python test_integration_filtering.py
+pytest tests/test_unit_content_processor.py
 
 # Run a specific test class
-.venv/bin/python -m unittest tests.test_content_processor.TestContentProcessor
+pytest tests/test_unit_content_processor.py::TestContentProcessor
 
 # Run a specific test method
-.venv/bin/python -m unittest tests.test_content_processor.TestContentProcessor.test_convert_html_to_text_with_libraries
+pytest tests/test_unit_content_processor.py::TestContentProcessor::test_convert_html_to_text_with_libraries
+
+# Run with detailed output for debugging
+pytest tests/test_unit_content_processor.py -v -s
+
+# Run a specific test and stop on first failure
+pytest tests/test_unit_content_processor.py -x
 ```
 
-### Running Standalone Test Files
-
-The following test files can be run independently and include their own test runners:
+### Running Tests with Advanced Options
 
 ```bash
-# Content filtering validation tests (standalone)
-cd tests && python test_content_filtering.py
+# Run tests with coverage and generate HTML report
+pytest --cov=src --cov-report=html
 
-# Integration filtering tests (standalone)
-cd tests && python test_integration_filtering.py
+# Run tests in parallel (requires pytest-xdist)
+pytest -n auto
+
+# Run only failed tests from last run
+pytest --lf
+
+# Run tests that match a specific pattern
+pytest -k "test_html or test_content"
+
+# Run tests with maximum verbosity and show local variables on failure
+pytest -vvv --tb=long
+
+# Run tests and stop after first failure
+pytest -x
+
+# Run tests and enter debugger on failure (requires pytest-pdb)
+pytest --pdb
 ```
-
-## Test Results
-
-All tests should pass:
-
-```
-----------------------------------------------------------------------
-Ran 56 tests in 0.028s
-
-OK
-```
-
-The test suite includes:
-- **33 tests** for ContentProcessor functionality
-- **12 tests** for EmailProcessor changes  
-- **3 tests** for ProcessingStats
-- **8 tests** for end-to-end integration scenarios
-- **6 additional standalone test categories** for content filtering validation
-- **1 comprehensive integration test** for email processing pipeline with filtering
 
 ## Test Categories
 
-### Unit Tests
-- Test individual methods and functions in isolation
-- Use mocking to isolate dependencies
-- Focus on edge cases and error handling
+### Unit Tests (`test_unit_*`)
+- **Purpose**: Test individual methods and functions in isolation
+- **Characteristics**: Fast execution, extensive mocking, focused scope
+- **Benefits**: Quick feedback, precise error localization, reliable CI/CD
+- **Examples**: 
+  - Individual ContentProcessor methods with mocked dependencies
+  - EmailProcessor logic with mocked IMAP connections
+  - CacheManager operations with temporary file systems
 
-### Integration Tests
-- Test complete workflows end-to-end
-- Verify interaction between components
-- Test real-world scenarios with actual email message structures
+### Integration Tests (`test_integration_*`)
+- **Purpose**: Test complete workflows end-to-end
+- **Characteristics**: Slower execution, minimal mocking, broader scope
+- **Benefits**: Verify component interactions, catch integration issues
+- **Examples**:
+  - Full email processing pipeline with real ContentProcessor
+  - Cache integration with actual file I/O
+  - Multi-component workflows with realistic data
 
-### Standalone Validation Tests
-- Self-contained test files that can run independently
-- Focus on specific functionality areas (content filtering, validation)
-- Include comprehensive test scenarios and detailed output
-
-### Error Handling Tests
-- Verify graceful handling of exceptions
-- Test fallback mechanisms
-- Ensure system stability under error conditions
+### Test Organization Benefits
+- **Clear Separation**: Easy to run fast unit tests during development
+- **Selective Execution**: Run integration tests before commits/deployments
+- **Maintainability**: Clear understanding of test scope and purpose
+- **CI/CD Optimization**: Different test stages for different pipeline phases
 
 ## Key Test Scenarios
 
@@ -220,10 +240,27 @@ The test suite includes:
 
 When adding new functionality:
 
-1. Add corresponding unit tests
+1. Add corresponding unit tests following pytest conventions
 2. Update integration tests if needed
-3. Consider if standalone validation tests are appropriate
-4. Ensure all tests pass
-5. Update this README if test structure changes
+3. Use pytest fixtures for common test setup
+4. Run `pytest` to ensure all tests pass
+5. Consider adding pytest markers for test categorization
+6. Update this README if test structure changes
 
-The tests are designed to be comprehensive and maintainable, providing confidence in the content processing functionality. The addition of standalone test files (`test_content_filtering.py` and `test_integration_filtering.py`) provides focused validation of specific functionality areas with detailed test output and independent execution capabilities.
+## Pytest Configuration
+
+The project uses pytest with configuration in `pyproject.toml`:
+
+```toml
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-v --cov=src"
+```
+
+This configuration:
+- Sets the test directory to `tests/`
+- Discovers all files matching `test_*.py`
+- Runs with verbose output and source coverage by default
+
+The tests are designed to be comprehensive and maintainable, providing confidence in the content processing functionality. Using pytest provides better test discovery, reporting, and integration with modern Python development workflows.

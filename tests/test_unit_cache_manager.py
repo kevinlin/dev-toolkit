@@ -15,7 +15,7 @@ import datetime
 
 # Import the CacheManager class from main.py
 import sys
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from main import CacheManager
 
 
