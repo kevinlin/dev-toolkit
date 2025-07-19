@@ -13,8 +13,10 @@ import imaplib
 import time
 import email
 import email.message
+import json
+import datetime
 from dataclasses import dataclass
-from typing import Optional, Iterator, List
+from typing import Optional, Iterator, List, Set
 
 # Try to import dotenv, but continue without it if not available
 try:
@@ -1055,14 +1057,179 @@ class ContentProcessor:
             return False
 
 
+class CacheManager:
+    """Manages UID caching for duplicate prevention"""
+    
+    def __init__(self, provider: str, output_dir: str = "output"):
+        """
+        Initialize cache manager for the specified provider.
+        
+        Args:
+            provider: Email provider ('gmail' or 'icloud')
+            output_dir: Directory where cache files are stored
+        """
+        self.provider = provider.lower()
+        self.output_dir = output_dir
+        self.cache_file = os.path.join(output_dir, f"{self.provider}.cache.json")
+        self.processed_uids: Set[str] = set()
+        self.cache_metadata = {
+            "last_updated": None,
+            "total_processed": 0
+        }
+        
+        # Ensure output directory exists
+        self._ensure_output_directory()
+    
+    def _ensure_output_directory(self) -> None:
+        """Create output directory if it doesn't exist"""
+        try:
+            if not os.path.exists(self.output_dir):
+                os.makedirs(self.output_dir)
+                print(f"Created output directory: {self.output_dir}")
+        except Exception as e:
+            print(f"Warning: Failed to create output directory {self.output_dir}: {str(e)}")
+    
+    def load_cache(self) -> None:
+        """
+        Load existing cache data from JSON file.
+        Creates new cache if file doesn't exist or is corrupted.
+        """
+        try:
+            if os.path.exists(self.cache_file):
+                print(f"Loading cache from {self.cache_file}")
+                
+                with open(self.cache_file, 'r', encoding='utf-8') as f:
+                    cache_data = json.load(f)
+                
+                # Validate cache structure
+                if not isinstance(cache_data, dict):
+                    raise ValueError("Cache file has invalid structure")
+                
+                # Load processed UIDs
+                processed_uids = cache_data.get('processed_uids', [])
+                if isinstance(processed_uids, list):
+                    self.processed_uids = set(processed_uids)
+                else:
+                    raise ValueError("processed_uids must be a list")
+                
+                # Load metadata
+                self.cache_metadata['last_updated'] = cache_data.get('last_updated')
+                self.cache_metadata['total_processed'] = cache_data.get('total_processed', len(self.processed_uids))
+                
+                print(f"Loaded cache with {len(self.processed_uids)} processed UIDs")
+                if self.cache_metadata['last_updated']:
+                    print(f"Cache last updated: {self.cache_metadata['last_updated']}")
+                
+            else:
+                print(f"No existing cache found at {self.cache_file}")
+                print("Starting with empty cache")
+                
+        except Exception as e:
+            print(f"Warning: Error loading cache file {self.cache_file}: {str(e)}")
+            print("Creating new cache file and continuing...")
+            self._create_new_cache()
+    
+    def _create_new_cache(self) -> None:
+        """Create a new empty cache"""
+        self.processed_uids = set()
+        self.cache_metadata = {
+            "last_updated": None,
+            "total_processed": 0
+        }
+        print("Initialized new empty cache")
+    
+    def save_cache(self) -> None:
+        """
+        Save current cache data to JSON file.
+        Updates metadata with current timestamp and count.
+        """
+        try:
+            # Update metadata
+            self.cache_metadata['last_updated'] = datetime.datetime.now().isoformat()
+            self.cache_metadata['total_processed'] = len(self.processed_uids)
+            
+            # Prepare cache data
+            cache_data = {
+                'processed_uids': sorted(list(self.processed_uids)),  # Sort for consistency
+                'last_updated': self.cache_metadata['last_updated'],
+                'total_processed': self.cache_metadata['total_processed']
+            }
+            
+            # Write to file with atomic operation (write to temp file first)
+            temp_file = self.cache_file + '.tmp'
+            
+            with open(temp_file, 'w', encoding='utf-8') as f:
+                json.dump(cache_data, f, indent=2, ensure_ascii=False)
+            
+            # Atomic move (rename temp file to actual file)
+            if os.path.exists(self.cache_file):
+                # Create backup of existing cache
+                backup_file = self.cache_file + '.bak'
+                if os.path.exists(backup_file):
+                    os.remove(backup_file)
+                os.rename(self.cache_file, backup_file)
+            
+            os.rename(temp_file, self.cache_file)
+            
+            print(f"Cache saved successfully to {self.cache_file}")
+            print(f"Total cached UIDs: {len(self.processed_uids)}")
+            
+        except Exception as e:
+            print(f"Error saving cache to {self.cache_file}: {str(e)}")
+            # Clean up temp file if it exists
+            temp_file = self.cache_file + '.tmp'
+            if os.path.exists(temp_file):
+                try:
+                    os.remove(temp_file)
+                except Exception:
+                    pass
+            raise
+    
+    def is_processed(self, uid: str) -> bool:
+        """
+        Check if a UID has been processed before.
+        
+        Args:
+            uid: Message UID to check
+            
+        Returns:
+            bool: True if UID is in cache, False otherwise
+        """
+        return uid in self.processed_uids
+    
+    def mark_processed(self, uid: str) -> None:
+        """
+        Mark a UID as processed by adding it to the cache.
+        
+        Args:
+            uid: Message UID to mark as processed
+        """
+        self.processed_uids.add(uid)
+    
+    def get_cache_stats(self) -> dict:
+        """
+        Get cache statistics.
+        
+        Returns:
+            dict: Cache statistics including size and last updated
+        """
+        return {
+            'total_cached_uids': len(self.processed_uids),
+            'last_updated': self.cache_metadata['last_updated'],
+            'cache_file': self.cache_file,
+            'provider': self.provider
+        }
+
+
 class EmailProcessor:
     """Handles email fetching, processing, and statistics tracking"""
     
-    def __init__(self, imap_manager: IMAPConnectionManager):
+    def __init__(self, imap_manager: IMAPConnectionManager, cache_manager: Optional[CacheManager] = None):
         self.imap_manager = imap_manager
         self.stats = ProcessingStats()
         self.processed_messages = []  # Store processed messages for now
         self.content_processor = ContentProcessor()  # Initialize content processor
+        self.cache_manager = cache_manager  # Cache manager for duplicate prevention
     
     def process_emails(self, batch_size: int = 500, progress_interval: int = 100) -> ProcessingStats:
         """
@@ -1077,10 +1244,21 @@ class EmailProcessor:
         """
         print("Starting email processing...")
         
+        # Load existing cache if cache manager is available
+        if self.cache_manager:
+            self.cache_manager.load_cache()
+            cache_stats = self.cache_manager.get_cache_stats()
+            print(f"Cache loaded: {cache_stats['total_cached_uids']} previously processed UIDs")
+        
         try:
             # Process emails in batches
             for batch_uids in self.imap_manager.fetch_message_uids(batch_size):
                 self._process_batch(batch_uids, progress_interval)
+            
+            # Save cache after processing if cache manager is available
+            if self.cache_manager:
+                self.cache_manager.save_cache()
+                print("Cache updated and saved successfully")
             
             # Final summary
             print("\nEmail processing completed!")
@@ -1091,6 +1269,15 @@ class EmailProcessor:
         except Exception as e:
             print(f"Error during email processing: {str(e)}")
             self.stats.errors += 1
+            
+            # Try to save cache even if there was an error
+            if self.cache_manager:
+                try:
+                    self.cache_manager.save_cache()
+                    print("Cache saved despite processing error")
+                except Exception as cache_error:
+                    print(f"Warning: Failed to save cache after error: {str(cache_error)}")
+            
             return self.stats
     
     def _process_batch(self, uids: List[str], progress_interval: int) -> None:
@@ -1103,6 +1290,11 @@ class EmailProcessor:
         """
         for uid in uids:
             try:
+                # Check if message is already processed using cache
+                if self.cache_manager and self.cache_manager.is_processed(uid):
+                    self.stats.skipped_duplicate += 1
+                    continue
+                
                 # Fetch individual message
                 message = self.imap_manager.fetch_message(uid)
                 
@@ -1110,8 +1302,12 @@ class EmailProcessor:
                     self.stats.errors += 1
                     continue
                 
-                # Process the message
-                self._process_single_message(uid, message)
+                # Process the message and check if it was retained
+                was_retained = self._process_single_message(uid, message)
+                
+                # Only mark message as processed in cache if it was actually retained
+                if self.cache_manager and was_retained:
+                    self.cache_manager.mark_processed(uid)
                 
                 # Update total count
                 self.stats.total_fetched += 1
@@ -1126,19 +1322,22 @@ class EmailProcessor:
                 self.stats.errors += 1
                 continue
     
-    def _process_single_message(self, uid: str, message: email.message.Message) -> None:
+    def _process_single_message(self, uid: str, message: email.message.Message) -> bool:
         """
         Process a single email message with content extraction and filtering.
         
         Args:
             uid: Message UID
             message: Parsed email message
+            
+        Returns:
+            bool: True if message was retained, False if filtered out
         """
         try:
             # Check if message is system-generated first
             if self.content_processor.is_system_generated(message):
                 self.stats.skipped_system += 1
-                return
+                return False
             
             # Extract and clean body content
             body_content = self.content_processor.extract_body_content(message)
@@ -1146,7 +1345,7 @@ class EmailProcessor:
             # Validate content quality
             if not self.content_processor.is_valid_content(body_content):
                 self.stats.skipped_short += 1
-                return
+                return False
             
             # Get basic message info
             subject = message.get('Subject', 'No Subject')
@@ -1161,11 +1360,14 @@ class EmailProcessor:
                 'content': body_content,
                 'word_count': len(body_content.split())
             })
+            
+            return True  # Message was retained
                 
         except Exception as e:
             print(f"Error processing message content for UID {uid}: {str(e)}")
             self.stats.errors += 1
-    
+            return False  # Message was not retained due to error
+
 
 
 
@@ -1200,7 +1402,9 @@ def main():
             print("IMAP connection and folder selection successful!")
             
             # Initialize email processor and start processing
-            processor = EmailProcessor(imap_manager)
+            # Create a cache manager for the email processor
+            cache_manager = CacheManager(config.provider)
+            processor = EmailProcessor(imap_manager, cache_manager)
             
             # Process emails with batch size of 500 and progress logging every 100 emails
             final_stats = processor.process_emails(batch_size=500, progress_interval=100)

@@ -19,6 +19,7 @@
   - Create pagination logic to traverse entire mailbox without memory overflow
   - Add progress logging every 100 processed emails
   - Implement sequential message processing with proper error handling
+  - Write unit tests for email fetching and pagination system
   - _Requirements: 2.3, 2.4, 2.5, 5.1, 7.2_
 
 - [x] 4. Build content extraction and HTML processing
@@ -26,16 +27,18 @@
   - Create HTML to plain text conversion using html2text library
   - Add BeautifulSoup integration for robust HTML parsing
   - Implement whitespace normalization and line break standardization
+  - Write unit tests for content extraction and HTML processing
   - _Requirements: 3.5, 3.6, 4.6_
 
 - [x] 5. Implement content filtering and validation
-  - Create word count validation to exclude messages with fewer than 20 words
+  - Create word count validation tco exclude messages with fewer than 20 words
   - Implement system-generated content detection (auto-replies, receipts)
   - Build quoted reply and forwarded text stripping using regex patterns
   - Add content validation functions for meaningful email detection
+  - Write unit tests for content filtering and validation
   - _Requirements: 3.1, 3.2, 3.3_
 
-- [ ] 6. Create caching system for duplicate prevention
+- [x] 6. Create caching system for duplicate prevention
   - Implement JSON-based cache file management for processed UIDs
   - Create cache loading and saving functions for gmail.cache.json and icloud.cache.json
   - Add duplicate detection logic based on UID caching
