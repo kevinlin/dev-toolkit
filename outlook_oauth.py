@@ -317,11 +317,31 @@ class OutlookOAuth2Client:
                                 h = html2text.HTML2Text()
                                 h.ignore_links = True
                                 h.ignore_images = True
+                                h.ignore_emphasis = True
+                                h.body_width = 0  # No line wrapping
+                                h.unicode_snob = True  # Better Unicode handling
+                                h.bypass_tables = False
+                                h.ignore_tables = False
+                                h.single_line_break = False  # Allow double line breaks for paragraphs
                                 body_content = h.handle(body_content)
+                                
+                                # Clean up excessive line breaks that html2text might add
+                                body_content = re.sub(r'\n\s*\n\s*\n+', '\n\n', body_content)
+                                # Remove leading/trailing whitespace
+                                body_content = body_content.strip()
+                                
                             except ImportError:
-                                # Fallback to basic HTML stripping
+                                # Fallback to basic HTML stripping with line break preservation
                                 import re
+                                # Convert common HTML elements to line breaks first
+                                body_content = re.sub(r'<br\s*/?>', '\n', body_content, flags=re.IGNORECASE)
+                                body_content = re.sub(r'</p>', '\n\n', body_content, flags=re.IGNORECASE)
+                                body_content = re.sub(r'</div>', '\n', body_content, flags=re.IGNORECASE)
+                                body_content = re.sub(r'</h[1-6]>', '\n\n', body_content, flags=re.IGNORECASE)
+                                # Remove all remaining HTML tags
                                 body_content = re.sub(r'<[^>]+>', '', body_content)
+                                # Clean up excessive whitespace
+                                body_content = re.sub(r'\n\s*\n\s*\n+', '\n\n', body_content)
                     
                     sender_email = ""
                     if "sender" in msg_data and msg_data["sender"]:

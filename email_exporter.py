@@ -1042,14 +1042,14 @@ class OutlookOAuth2Processor:
             
             # Additional content processing (HTML to text, etc.)
             if body_content:
-                # Convert HTML to plain text using content processor
-                body_content = self.content_processor.convert_html_to_text(body_content)
+                # For Outlook OAuth2, HTML to text conversion is already done by Graph API processing
+                # Just do basic cleanup without aggressive whitespace normalization
                 
                 # Strip quoted replies
                 body_content = self.content_processor.strip_quoted_replies(body_content)
                 
-                # Normalize whitespace
-                body_content = self.content_processor.normalize_whitespace(body_content)
+                # Do minimal whitespace cleanup (preserve paragraph structure)
+                body_content = self._normalize_outlook_content(body_content)
             
             # Validate content quality
             if not self.content_processor.is_valid_content(body_content):
@@ -1100,6 +1100,58 @@ class OutlookOAuth2Processor:
             print(f"Error: Failed to process Outlook message {message.id}: {str(e)}")
             self.stats.increment_error_type('processing')
             return False  # Message was not retained due to error
+    
+    def _normalize_outlook_content(self, content: str) -> str:
+        """
+        Normalize Outlook content while preserving paragraph structure.
+        Less aggressive than the standard normalize_whitespace function.
+        
+        Args:
+            content: Content to normalize
+            
+        Returns:
+            str: Content with normalized whitespace but preserved paragraphs
+        """
+        if not content:
+            return ""
+        
+        try:
+            # Replace different types of line breaks with standard \n
+            content = re.sub(r'\r\n|\r', '\n', content)
+            
+            # Remove excessive whitespace within lines
+            content = re.sub(r'[ \t]+', ' ', content)
+            
+            # Remove leading/trailing whitespace from each line
+            lines = content.split('\n')
+            cleaned_lines = [line.strip() for line in lines]
+            
+            # Remove excessive blank lines (more than 2 consecutive) but preserve paragraph structure
+            result_lines = []
+            blank_count = 0
+            
+            for line in cleaned_lines:
+                if line:  # Non-blank line
+                    result_lines.append(line)
+                    blank_count = 0
+                else:  # Blank line
+                    blank_count += 1
+                    # Allow up to 1 blank line for paragraph separation
+                    if blank_count <= 1:
+                        result_lines.append(line)
+            
+            # Remove trailing blank lines
+            while result_lines and not result_lines[-1]:
+                result_lines.pop()
+            
+            # Join lines back together
+            content = '\n'.join(result_lines)
+            
+            return content
+            
+        except Exception as e:
+            print(f"Warning: Error normalizing Outlook content: {str(e)}")
+            return content.strip() if content else ""
     
     def _show_message_preview(self) -> None:
         """Show enhanced preview of first 3 retained messages for quality check"""
