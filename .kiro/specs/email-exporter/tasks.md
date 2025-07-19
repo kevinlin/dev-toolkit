@@ -65,27 +65,21 @@
   - Write unit tests for file operations and output formatting
   - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7_
 
-- [ ] 9. Create comprehensive logging and summary reporting
+- [ ] 9. Create comprehensive logging, error handling and summary reporting
   - Implement console progress logging with batch processing updates
+  - Implement individual message processing error handling with continuation
+  - Add timeout handling for batch fetch operations with retry logic
   - Create final summary statistics (total, skipped short, skipped duplicate, retained)
   - Add first 3 retained message preview functionality
   - Implement connected email address display
   - Add error logging to console with clear error messages
-  - Write unit tests for logging and summary generation
-  - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5_
+  - Write unit tests for logging, error handling scenarios and summary generation
+  - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 7.1, 7.2, 7.3, 7.4, 8.5_
 
-- [ ] 10. Add comprehensive error handling and recovery
-  - Implement individual message processing error handling with continuation
-  - Add timeout handling for batch fetch operations with retry logic
-  - Create file write operation error handling with graceful exit
-  - Add IMAP connection error recovery and clear error messaging
-  - Write unit tests for error handling scenarios and recovery mechanisms
-  - _Requirements: 7.1, 7.2, 7.3, 7.4, 8.5_
-
-- [ ] 11. Create modular function structure and code organization
-  - Refactor code into modular functions following single responsibility principle
+- [ ] 10. Create modular function structure and code organization
+  - The main entry point file should be renamed to: email-exporter.py
+  - Refactor code into modular classes and functions following single responsibility principle
   - Organize functions for IMAP connection, HTML parsing, deduplication, file output, logging, and caching
   - Implement clear function naming and documentation
-  - Add proper exception handling for each operation type
-  - Write unit tests for all refactored functions and ensure existing tests pass
+  - Review/and update unit tests for all refactored functions and ensure existing tests pass
   - _Requirements: 8.1, 8.2, 8.3, 8.5_
