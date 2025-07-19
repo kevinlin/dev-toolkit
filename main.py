@@ -11,8 +11,10 @@ import os
 import sys
 import imaplib
 import time
+import email
+import email.message
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Iterator, List
 
 # Try to import dotenv, but continue without it if not available
 try:
@@ -30,6 +32,27 @@ class ProviderConfig:
     imap_server: str
     port: int
     sent_folder: str
+
+
+@dataclass
+class ProcessingStats:
+    """Statistics for email processing"""
+    total_fetched: int = 0
+    skipped_short: int = 0
+    skipped_duplicate: int = 0
+    skipped_system: int = 0
+    retained: int = 0
+    errors: int = 0
+    
+    def get_summary(self) -> str:
+        """Get a formatted summary of processing statistics"""
+        return (f"Processing Summary:\n"
+                f"  Total fetched: {self.total_fetched}\n"
+                f"  Skipped (short): {self.skipped_short}\n"
+                f"  Skipped (duplicate): {self.skipped_duplicate}\n"
+                f"  Skipped (system): {self.skipped_system}\n"
+                f"  Retained: {self.retained}\n"
+                f"  Errors: {self.errors}")
 
 
 class EmailExporterConfig:
@@ -306,6 +329,235 @@ class IMAPConnectionManager:
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Context manager exit - ensures cleanup"""
         self.disconnect()
+    
+    def fetch_message_uids(self, batch_size: int = 500) -> Iterator[List[str]]:
+        """
+        Fetch message UIDs in batches to prevent memory overflow.
+        
+        Args:
+            batch_size: Number of messages to fetch per batch (default: 500)
+            
+        Yields:
+            List[str]: Batch of message UIDs
+        """
+        if not self.is_connected or not self.connection:
+            print("Error: Not connected to IMAP server")
+            return
+        
+        try:
+            # Search for all messages in the selected folder using UID search
+            print("Searching for all messages in sent folder...")
+            status, data = self.connection.uid('search', None, 'ALL')
+            
+            if status != 'OK':
+                print(f"Error: Failed to search messages: {data}")
+                return
+            
+            # Parse UIDs from search results
+            if not data or not data[0]:
+                print("No messages found in sent folder")
+                return
+            
+            # Split the UID string into individual UIDs
+            all_uids = data[0].decode('utf-8').split()
+            total_messages = len(all_uids)
+            
+            print(f"Found {total_messages} messages in sent folder")
+            
+            # Yield UIDs in batches
+            for i in range(0, total_messages, batch_size):
+                batch_uids = all_uids[i:i + batch_size]
+                batch_num = (i // batch_size) + 1
+                total_batches = (total_messages + batch_size - 1) // batch_size
+                
+                print(f"Processing batch {batch_num}/{total_batches} ({len(batch_uids)} messages)")
+                yield batch_uids
+                
+        except Exception as e:
+            print(f"Error fetching message UIDs: {str(e)}")
+            return
+    
+    def fetch_message(self, uid: str) -> Optional[email.message.Message]:
+        """
+        Fetch a single email message by UID.
+        
+        Args:
+            uid: Message UID to fetch
+            
+        Returns:
+            email.message.Message: Parsed email message or None if error
+        """
+        if not self.is_connected or not self.connection:
+            print("Error: Not connected to IMAP server")
+            return None
+        
+        try:
+            # Fetch message by UID
+            status, data = self.connection.uid('fetch', uid, '(RFC822)')
+            
+            if status != 'OK':
+                print(f"Warning: Failed to fetch message UID {uid}: {data}")
+                return None
+            
+            if not data or not data[0]:
+                print(f"Warning: No data returned for message UID {uid}")
+                return None
+            
+            # Parse the raw email message
+            raw_email = data[0][1]
+            if raw_email is None:
+                print(f"Warning: No email data returned for UID {uid}")
+                return None
+                
+            if isinstance(raw_email, bytes):
+                message = email.message_from_bytes(raw_email)
+            else:
+                message = email.message_from_string(str(raw_email))
+            
+            return message
+            
+        except Exception as e:
+            print(f"Error fetching message UID {uid}: {str(e)}")
+            return None
+
+
+class EmailProcessor:
+    """Handles email fetching, processing, and statistics tracking"""
+    
+    def __init__(self, imap_manager: IMAPConnectionManager):
+        self.imap_manager = imap_manager
+        self.stats = ProcessingStats()
+        self.processed_messages = []  # Store processed messages for now
+    
+    def process_emails(self, batch_size: int = 500, progress_interval: int = 100) -> ProcessingStats:
+        """
+        Process all emails in the sent folder with pagination and progress logging.
+        
+        Args:
+            batch_size: Number of messages to fetch per batch
+            progress_interval: Log progress every N processed emails
+            
+        Returns:
+            ProcessingStats: Final processing statistics
+        """
+        print("Starting email processing...")
+        
+        try:
+            # Process emails in batches
+            for batch_uids in self.imap_manager.fetch_message_uids(batch_size):
+                self._process_batch(batch_uids, progress_interval)
+            
+            # Final summary
+            print("\nEmail processing completed!")
+            print(self.stats.get_summary())
+            
+            return self.stats
+            
+        except Exception as e:
+            print(f"Error during email processing: {str(e)}")
+            self.stats.errors += 1
+            return self.stats
+    
+    def _process_batch(self, uids: List[str], progress_interval: int) -> None:
+        """
+        Process a batch of message UIDs sequentially.
+        
+        Args:
+            uids: List of message UIDs to process
+            progress_interval: Log progress every N processed emails
+        """
+        for uid in uids:
+            try:
+                # Fetch individual message
+                message = self.imap_manager.fetch_message(uid)
+                
+                if message is None:
+                    self.stats.errors += 1
+                    continue
+                
+                # Process the message
+                self._process_single_message(uid, message)
+                
+                # Update total count
+                self.stats.total_fetched += 1
+                
+                # Log progress at specified intervals
+                if self.stats.total_fetched % progress_interval == 0:
+                    print(f"Progress: Processed {self.stats.total_fetched} emails "
+                          f"(retained: {self.stats.retained}, errors: {self.stats.errors})")
+                
+            except Exception as e:
+                print(f"Error processing message UID {uid}: {str(e)}")
+                self.stats.errors += 1
+                continue
+    
+    def _process_single_message(self, uid: str, message: email.message.Message) -> None:
+        """
+        Process a single email message.
+        
+        Args:
+            uid: Message UID
+            message: Parsed email message
+        """
+        try:
+            # For now, just extract basic information and count as retained
+            # This will be expanded in later tasks with content filtering
+            
+            # Get basic message info
+            subject = message.get('Subject', 'No Subject')
+            date = message.get('Date', 'No Date')
+            
+            # Simple validation - check if message has content
+            if self._has_valid_content(message):
+                self.stats.retained += 1
+                # Store basic info for now (will be replaced with actual content processing)
+                self.processed_messages.append({
+                    'uid': uid,
+                    'subject': subject,
+                    'date': date
+                })
+            else:
+                self.stats.skipped_short += 1
+                
+        except Exception as e:
+            print(f"Error processing message content for UID {uid}: {str(e)}")
+            self.stats.errors += 1
+    
+    def _has_valid_content(self, message: email.message.Message) -> bool:
+        """
+        Basic validation to check if message has content.
+        This is a placeholder that will be expanded in later tasks.
+        
+        Args:
+            message: Email message to validate
+            
+        Returns:
+            bool: True if message appears to have valid content
+        """
+        try:
+            # Basic check - ensure message has a subject or body
+            subject = message.get('Subject', '')
+            
+            # Try to get some body content
+            body = ""
+            if message.is_multipart():
+                for part in message.walk():
+                    if part.get_content_type() == "text/plain":
+                        body = part.get_payload(decode=True)
+                        if isinstance(body, bytes):
+                            body = body.decode('utf-8', errors='ignore')
+                        break
+            else:
+                body = message.get_payload(decode=True)
+                if isinstance(body, bytes):
+                    body = body.decode('utf-8', errors='ignore')
+            
+            # Simple validation - has subject or body content
+            return bool(subject.strip()) or bool(body.strip())
+            
+        except Exception:
+            # If we can't parse the message, consider it invalid
+            return False
 
 
 def main():
@@ -337,8 +589,14 @@ def main():
                 sys.exit(1)
             
             print("IMAP connection and folder selection successful!")
-            # TODO: Implement email fetching and processing
-            print("Email processing not yet implemented.")
+            
+            # Initialize email processor and start processing
+            processor = EmailProcessor(imap_manager)
+            
+            # Process emails with batch size of 500 and progress logging every 100 emails
+            final_stats = processor.process_emails(batch_size=500, progress_interval=100)
+            
+            print("\nEmail processing completed successfully!")
             print("Connection will be automatically cleaned up when exiting context manager.")
         
     except KeyboardInterrupt:
