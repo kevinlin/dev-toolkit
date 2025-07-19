@@ -25,6 +25,17 @@ except ImportError:
     def load_dotenv():
         pass
 
+# Import HTML processing libraries
+try:
+    from bs4 import BeautifulSoup
+    import html2text
+    HTML_PROCESSING_AVAILABLE = True
+except ImportError:
+    HTML_PROCESSING_AVAILABLE = False
+    print("Warning: HTML processing libraries not available. Install with: pip install beautifulsoup4 html2text")
+
+import re
+
 
 @dataclass
 class ProviderConfig:
@@ -421,6 +432,384 @@ class IMAPConnectionManager:
             return None
 
 
+class ContentProcessor:
+    """Handles email content extraction, cleaning, and filtering"""
+    
+    def __init__(self):
+        # Configure html2text converter
+        if HTML_PROCESSING_AVAILABLE:
+            self.html_converter = html2text.HTML2Text()
+            self.html_converter.ignore_links = True
+            self.html_converter.ignore_images = True
+            self.html_converter.ignore_emphasis = False
+            self.html_converter.body_width = 0  # Don't wrap lines
+            self.html_converter.unicode_snob = True
+        else:
+            self.html_converter = None
+    
+    def extract_body_content(self, message: email.message.Message) -> str:
+        """
+        Extract body content from email message, handling multipart messages.
+        
+        Args:
+            message: Email message to extract content from
+            
+        Returns:
+            str: Extracted and cleaned body content
+        """
+        try:
+            body_content = ""
+            
+            if message.is_multipart():
+                # Handle multipart messages - prioritize text/plain, fallback to text/html
+                text_parts = []
+                html_parts = []
+                
+                for part in message.walk():
+                    content_type = part.get_content_type()
+                    content_disposition = str(part.get("Content-Disposition", ""))
+                    
+                    # Skip attachments
+                    if "attachment" in content_disposition:
+                        continue
+                    
+                    try:
+                        payload = part.get_payload(decode=True)
+                        if payload is None:
+                            continue
+                            
+                        # Decode bytes to string
+                        if isinstance(payload, bytes):
+                            # Try to get charset from content type
+                            charset = part.get_content_charset() or 'utf-8'
+                            try:
+                                text_content = payload.decode(charset)
+                            except (UnicodeDecodeError, LookupError):
+                                # Fallback to utf-8 with error handling
+                                text_content = payload.decode('utf-8', errors='ignore')
+                        else:
+                            text_content = str(payload)
+                        
+                        # Collect text and HTML parts
+                        if content_type == "text/plain":
+                            text_parts.append(text_content)
+                        elif content_type == "text/html":
+                            html_parts.append(text_content)
+                            
+                    except Exception as e:
+                        print(f"Warning: Error processing message part: {str(e)}")
+                        continue
+                
+                # Prefer plain text over HTML
+                if text_parts:
+                    body_content = "\n\n".join(text_parts)
+                elif html_parts:
+                    # Convert HTML to text
+                    html_content = "\n\n".join(html_parts)
+                    body_content = self.convert_html_to_text(html_content)
+                    
+            else:
+                # Handle single-part messages
+                payload = message.get_payload(decode=True)
+                if payload is not None:
+                    # Decode bytes to string
+                    if isinstance(payload, bytes):
+                        charset = message.get_content_charset() or 'utf-8'
+                        try:
+                            body_content = payload.decode(charset)
+                        except (UnicodeDecodeError, LookupError):
+                            body_content = payload.decode('utf-8', errors='ignore')
+                    else:
+                        body_content = str(payload)
+                    
+                    # If it's HTML content, convert to text
+                    content_type = message.get_content_type()
+                    if content_type == "text/html":
+                        body_content = self.convert_html_to_text(body_content)
+            
+            # Clean and normalize the extracted content
+            if body_content:
+                body_content = self.strip_quoted_replies(body_content)
+                body_content = self.normalize_whitespace(body_content)
+            
+            return body_content
+            
+        except Exception as e:
+            print(f"Error extracting body content: {str(e)}")
+            return ""
+    
+    def convert_html_to_text(self, html_content: str) -> str:
+        """
+        Convert HTML content to plain text using html2text and BeautifulSoup.
+        
+        Args:
+            html_content: HTML content to convert
+            
+        Returns:
+            str: Plain text content
+        """
+        if not html_content or not html_content.strip():
+            return ""
+        
+        try:
+            # First, use BeautifulSoup for robust HTML parsing and cleanup
+            if HTML_PROCESSING_AVAILABLE:
+                soup = BeautifulSoup(html_content, 'html.parser')
+                
+                # Remove script and style elements
+                for script in soup(["script", "style"]):
+                    script.decompose()
+                
+                # Get cleaned HTML
+                cleaned_html = str(soup)
+                
+                # Convert to text using html2text
+                if self.html_converter:
+                    text_content = self.html_converter.handle(cleaned_html)
+                else:
+                    # Fallback: use BeautifulSoup's get_text method
+                    text_content = soup.get_text()
+            else:
+                # Fallback: basic HTML tag removal using regex
+                text_content = re.sub(r'<[^>]+>', '', html_content)
+            
+            return text_content
+            
+        except Exception as e:
+            print(f"Warning: Error converting HTML to text: {str(e)}")
+            # Fallback: basic HTML tag removal
+            try:
+                return re.sub(r'<[^>]+>', '', html_content)
+            except Exception:
+                return html_content
+    
+    def strip_quoted_replies(self, content: str) -> str:
+        """
+        Strip quoted replies and forwarded text from email content.
+        
+        Args:
+            content: Email content to clean
+            
+        Returns:
+            str: Content with quoted replies removed
+        """
+        if not content:
+            return ""
+        
+        try:
+            lines = content.split('\n')
+            cleaned_lines = []
+            
+            # Common patterns for quoted replies and forwards
+            quote_patterns = [
+                r'^>.*',  # Lines starting with >
+                r'^\s*>.*',  # Lines starting with whitespace and >
+                r'^On .* wrote:.*',  # "On [date] [person] wrote:"
+                r'^From:.*',  # Email headers in forwards
+                r'^To:.*',
+                r'^Subject:.*',
+                r'^Date:.*',
+                r'^Sent:.*',
+                r'^\s*-----Original Message-----.*',  # Outlook style
+                r'^\s*________________________________.*',  # Outlook separator
+                r'^\s*From: .*',  # Forward headers
+                r'^\s*Sent: .*',
+                r'^\s*To: .*',
+                r'^\s*Subject: .*',
+            ]
+            
+            # Compile patterns for efficiency
+            compiled_patterns = [re.compile(pattern, re.IGNORECASE) for pattern in quote_patterns]
+            
+            in_quoted_section = False
+            
+            for line in lines:
+                # Check if this line starts a quoted section
+                is_quote_line = any(pattern.match(line) for pattern in compiled_patterns)
+                
+                if is_quote_line:
+                    in_quoted_section = True
+                    continue
+                
+                # Check for end of quoted section (empty line or normal content)
+                if in_quoted_section:
+                    # If we hit an empty line, we might be out of the quoted section
+                    if not line.strip():
+                        # Add the empty line but don't mark as out of quoted section yet
+                        continue
+                    # If we hit a line that doesn't look like a quote, we're probably out
+                    elif not any(pattern.match(line) for pattern in compiled_patterns):
+                        # Check if this looks like normal content (not just a continuation of headers)
+                        if len(line.strip()) > 10 and not re.match(r'^\s*(From|To|Subject|Date|Sent):', line, re.IGNORECASE):
+                            in_quoted_section = False
+                        else:
+                            continue
+                
+                # If we're not in a quoted section, keep the line
+                if not in_quoted_section:
+                    cleaned_lines.append(line)
+            
+            return '\n'.join(cleaned_lines)
+            
+        except Exception as e:
+            print(f"Warning: Error stripping quoted replies: {str(e)}")
+            return content
+    
+    def normalize_whitespace(self, content: str) -> str:
+        """
+        Normalize whitespace and standardize line breaks.
+        
+        Args:
+            content: Content to normalize
+            
+        Returns:
+            str: Content with normalized whitespace
+        """
+        if not content:
+            return ""
+        
+        try:
+            # Replace different types of line breaks with standard \n
+            content = re.sub(r'\r\n|\r', '\n', content)
+            
+            # Remove excessive whitespace while preserving paragraph structure
+            # Replace multiple spaces with single space
+            content = re.sub(r'[ \t]+', ' ', content)
+            
+            # Replace multiple consecutive newlines with maximum of 2 (to preserve paragraphs)
+            content = re.sub(r'\n\s*\n\s*\n+', '\n\n', content)
+            
+            # Remove leading/trailing whitespace from each line
+            lines = content.split('\n')
+            cleaned_lines = [line.strip() for line in lines]
+            
+            # Remove empty lines at the beginning and end
+            while cleaned_lines and not cleaned_lines[0]:
+                cleaned_lines.pop(0)
+            while cleaned_lines and not cleaned_lines[-1]:
+                cleaned_lines.pop()
+            
+            # Join lines back together
+            content = '\n'.join(cleaned_lines)
+            
+            return content
+            
+        except Exception as e:
+            print(f"Warning: Error normalizing whitespace: {str(e)}")
+            return content.strip() if content else ""
+    
+    def is_valid_content(self, content: str) -> bool:
+        """
+        Validate that content meets minimum quality requirements.
+        
+        Args:
+            content: Content to validate
+            
+        Returns:
+            bool: True if content is valid, False otherwise
+        """
+        if not content or not content.strip():
+            return False
+        
+        try:
+            # Count words (split by whitespace)
+            words = content.split()
+            word_count = len(words)
+            
+            # Requirement: minimum 20 words
+            if word_count < 20:
+                return False
+            
+            # Additional quality checks
+            # Check if content is mostly non-alphabetic (might be encoded/corrupted)
+            alpha_chars = sum(1 for c in content if c.isalpha())
+            total_chars = len(content.replace(' ', '').replace('\n', ''))
+            
+            if total_chars > 0:
+                alpha_ratio = alpha_chars / total_chars
+                # Require at least 50% alphabetic characters
+                if alpha_ratio < 0.5:
+                    return False
+            
+            return True
+            
+        except Exception as e:
+            print(f"Warning: Error validating content: {str(e)}")
+            return False
+    
+    def is_system_generated(self, message: email.message.Message) -> bool:
+        """
+        Check if message appears to be system-generated (auto-replies, receipts, etc.).
+        
+        Args:
+            message: Email message to check
+            
+        Returns:
+            bool: True if message appears to be system-generated
+        """
+        try:
+            # Check common system-generated message indicators
+            subject = message.get('Subject', '').lower()
+            
+            # Common system message patterns
+            system_patterns = [
+                r'auto.?reply',
+                r'out of office',
+                r'delivery.*notification',
+                r'undelivered.*mail',
+                r'mail.*delivery.*failed',
+                r'read.*receipt',
+                r'automatic.*reply',
+                r'vacation.*message',
+                r'away.*message',
+                r'bounce.*message',
+                r'mailer.?daemon',
+                r'postmaster',
+                r'no.?reply',
+                r'do.?not.?reply',
+            ]
+            
+            # Check subject line
+            for pattern in system_patterns:
+                if re.search(pattern, subject, re.IGNORECASE):
+                    return True
+            
+            # Check sender/from field
+            from_field = message.get('From', '').lower()
+            system_senders = [
+                'mailer-daemon',
+                'postmaster',
+                'noreply',
+                'no-reply',
+                'donotreply',
+                'do-not-reply',
+                'bounce',
+                'auto-reply',
+            ]
+            
+            for sender in system_senders:
+                if sender in from_field:
+                    return True
+            
+            # Check for auto-reply headers
+            auto_reply_headers = [
+                'X-Autoreply',
+                'X-Autorespond',
+                'Auto-Submitted',
+                'X-Auto-Response-Suppress',
+            ]
+            
+            for header in auto_reply_headers:
+                if message.get(header):
+                    return True
+            
+            return False
+            
+        except Exception as e:
+            print(f"Warning: Error checking if message is system-generated: {str(e)}")
+            return False
+
+
 class EmailProcessor:
     """Handles email fetching, processing, and statistics tracking"""
     
@@ -428,6 +817,7 @@ class EmailProcessor:
         self.imap_manager = imap_manager
         self.stats = ProcessingStats()
         self.processed_messages = []  # Store processed messages for now
+        self.content_processor = ContentProcessor()  # Initialize content processor
     
     def process_emails(self, batch_size: int = 500, progress_interval: int = 100) -> ProcessingStats:
         """
@@ -493,71 +883,45 @@ class EmailProcessor:
     
     def _process_single_message(self, uid: str, message: email.message.Message) -> None:
         """
-        Process a single email message.
+        Process a single email message with content extraction and filtering.
         
         Args:
             uid: Message UID
             message: Parsed email message
         """
         try:
-            # For now, just extract basic information and count as retained
-            # This will be expanded in later tasks with content filtering
+            # Check if message is system-generated first
+            if self.content_processor.is_system_generated(message):
+                self.stats.skipped_system += 1
+                return
+            
+            # Extract and clean body content
+            body_content = self.content_processor.extract_body_content(message)
+            
+            # Validate content quality
+            if not self.content_processor.is_valid_content(body_content):
+                self.stats.skipped_short += 1
+                return
             
             # Get basic message info
             subject = message.get('Subject', 'No Subject')
             date = message.get('Date', 'No Date')
             
-            # Simple validation - check if message has content
-            if self._has_valid_content(message):
-                self.stats.retained += 1
-                # Store basic info for now (will be replaced with actual content processing)
-                self.processed_messages.append({
-                    'uid': uid,
-                    'subject': subject,
-                    'date': date
-                })
-            else:
-                self.stats.skipped_short += 1
+            # Store processed message with cleaned content
+            self.stats.retained += 1
+            self.processed_messages.append({
+                'uid': uid,
+                'subject': subject,
+                'date': date,
+                'content': body_content,
+                'word_count': len(body_content.split())
+            })
                 
         except Exception as e:
             print(f"Error processing message content for UID {uid}: {str(e)}")
             self.stats.errors += 1
     
-    def _has_valid_content(self, message: email.message.Message) -> bool:
-        """
-        Basic validation to check if message has content.
-        This is a placeholder that will be expanded in later tasks.
-        
-        Args:
-            message: Email message to validate
-            
-        Returns:
-            bool: True if message appears to have valid content
-        """
-        try:
-            # Basic check - ensure message has a subject or body
-            subject = message.get('Subject', '')
-            
-            # Try to get some body content
-            body = ""
-            if message.is_multipart():
-                for part in message.walk():
-                    if part.get_content_type() == "text/plain":
-                        body = part.get_payload(decode=True)
-                        if isinstance(body, bytes):
-                            body = body.decode('utf-8', errors='ignore')
-                        break
-            else:
-                body = message.get_payload(decode=True)
-                if isinstance(body, bytes):
-                    body = body.decode('utf-8', errors='ignore')
-            
-            # Simple validation - has subject or body content
-            return bool(subject.strip()) or bool(body.strip())
-            
-        except Exception:
-            # If we can't parse the message, consider it invalid
-            return False
+
 
 
 def main():

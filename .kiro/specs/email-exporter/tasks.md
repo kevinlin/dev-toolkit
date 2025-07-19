@@ -21,7 +21,7 @@
   - Implement sequential message processing with proper error handling
   - _Requirements: 2.3, 2.4, 2.5, 5.1, 7.2_
 
-- [ ] 4. Build content extraction and HTML processing
+- [x] 4. Build content extraction and HTML processing
   - Implement email body extraction from multipart messages
   - Create HTML to plain text conversion using html2text library
   - Add BeautifulSoup integration for robust HTML parsing
@@ -40,6 +40,7 @@
   - Create cache loading and saving functions for gmail.cache.json and icloud.cache.json
   - Add duplicate detection logic based on UID caching
   - Implement cache corruption recovery with new file creation
+  - Write unit tests for cache operations and duplicate detection
   - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 6.7, 7.5_
 
 - [ ] 7. Build output file management system
@@ -47,6 +48,7 @@
   - Implement timestamped filename generation (provider-yyyyMMdd-HHmmss.txt format)
   - Add UTF-8 encoded file writing with proper content formatting
   - Create email delimiter system for separating individual messages in output
+  - Write unit tests for file operations and output formatting
   - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7_
 
 - [ ] 8. Implement deduplication based on content comparison
@@ -54,6 +56,7 @@
   - Implement body content comparison logic
   - Add duplicate tracking and skipping functionality
   - Integrate deduplication with caching system
+  - Write unit tests for content hashing and deduplication logic
   - _Requirements: 3.4, 6.6_
 
 - [ ] 9. Create comprehensive logging and summary reporting
@@ -62,6 +65,7 @@
   - Add first 3 retained message preview functionality
   - Implement connected email address display
   - Add error logging to console with clear error messages
+  - Write unit tests for logging and summary generation
   - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5_
 
 - [ ] 10. Add comprehensive error handling and recovery
@@ -69,6 +73,7 @@
   - Add timeout handling for batch fetch operations with retry logic
   - Create file write operation error handling with graceful exit
   - Add IMAP connection error recovery and clear error messaging
+  - Write unit tests for error handling scenarios and recovery mechanisms
   - _Requirements: 7.1, 7.2, 7.3, 7.4, 8.5_
 
 - [ ] 11. Create modular function structure and code organization
@@ -76,6 +81,7 @@
   - Organize functions for IMAP connection, HTML parsing, deduplication, file output, logging, and caching
   - Implement clear function naming and documentation
   - Add proper exception handling for each operation type
+  - Write unit tests for all refactored functions and ensure existing tests pass
   - _Requirements: 8.1, 8.2, 8.3, 8.5_
 
 - [ ] 12. Create configuration files and documentation
@@ -83,6 +89,7 @@
   - Write README.md with setup instructions and usage guide
   - Add requirements.txt file with necessary Python dependencies
   - Create usage examples and troubleshooting guide
+  - Write unit tests for configuration validation and environment setup
   - _Requirements: 1.1, 8.4_
 
 - [ ] 13. Implement end-to-end integration and testing
@@ -91,4 +98,5 @@
   - Implement graceful shutdown and cleanup procedures
   - Test complete workflow with sample email data
   - Validate output file format and content quality
+  - Write integration tests for complete workflow and ensure all unit tests pass
   - _Requirements: 1.1, 1.5, 2.4, 4.6, 5.2, 5.3_
