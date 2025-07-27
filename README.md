@@ -40,7 +40,24 @@ python email_exporter.py
 
 ## Setup
 
-This project uses `uv` for dependency management. To get started:
+### Development Installation
+
+1. Create and activate a virtual environment:
+```bash
+python -m venv .venv
+source .venv/bin/activate  # On Unix/macOS
+# or
+.venv\Scripts\activate  # On Windows
+```
+
+2. Install the project with development dependencies:
+```bash
+pip install -e .[dev]
+```
+
+### Alternative Setup with uv
+
+This project also supports `uv` for dependency management:
 
 1. Install uv (if not already installed):
 ```bash
@@ -57,29 +74,176 @@ source .venv/bin/activate  # On Unix/macOS
 
 3. Install dependencies:
 ```bash
-uv pip install -e .
+uv pip install -e .[dev]
 ```
 
-4. If you have a `.env` file in the project root, export the environment variables:
+## Development Tools
+
+This project includes a comprehensive development setup with linting, testing, and security scanning.
+
+### Install Development Dependencies
 ```bash
-set -a; . ./.env; set +a
+pip install -e .[dev]
 ```
+
+### Linting and Code Quality
+
+**Run linting checks:**
+```bash
+ruff check .
+```
+
+**Check code formatting:**
+```bash
+ruff format --check .
+```
+
+**Auto-format code:**
+```bash
+ruff format .
+```
+
+**Auto-fix linting issues:**
+```bash
+ruff check . --fix
+```
+
+**Combined format and fix:**
+```bash
+ruff format . && ruff check . --fix
+```
+
+### Testing
+
+**Run tests:**
+```bash
+pytest
+```
+
+**Run tests with coverage:**
+```bash
+pytest --cov=src --cov-report=term-missing
+```
+
+**Run tests with HTML coverage report:**
+```bash
+pytest --cov=src --cov-report=term-missing --cov-report=html
+```
+
+**Run tests with XML coverage (for CI):**
+```bash
+pytest --cov=src --cov-report=xml
+```
+
+### Security Scanning
+
+**Run Bandit security scan:**
+```bash
+bandit -r . --severity-level medium
+```
+
+**Run dependency vulnerability scan:**
+```bash
+pip-audit --desc
+```
+
+**Generate security reports:**
+```bash
+bandit -r . -f json -o bandit-report.json
+pip-audit --desc --output=json --output-file=pip-audit-report.json
+```
+
+### Combined Workflows
+
+**Full quality check (recommended before commits):**
+```bash
+# Run all checks in sequence
+ruff check . && \
+ruff format --check . && \
+bandit -r . --severity-level medium && \
+pip-audit --desc && \
+pytest --cov=src --cov-report=term-missing
+```
+
+**Format and fix all issues:**
+```bash
+# Format code and fix auto-fixable issues
+ruff format . && ruff check . --fix
+```
+
+### Clean Up Generated Files
+```bash
+# Remove test and coverage artifacts
+rm -rf .pytest_cache/ htmlcov/ .coverage coverage.xml
+
+# Remove security scan reports
+rm -rf bandit-report.json pip-audit-report.json
+
+# Remove Python cache files
+find . -type f -name "*.pyc" -delete
+find . -type d -name "__pycache__" -delete
+```
+
+### Continuous Integration
+
+GitHub Actions automatically runs all checks on every push and pull request:
+- **Linting**: Ruff for code quality and formatting
+- **Testing**: pytest with coverage reporting
+- **Security**: Bandit for security issues + pip-audit for dependency vulnerabilities
+- **Multi-Python**: Tests against Python 3.8, 3.9, 3.10, and 3.11
 
 ## Project Structure
 
 ```
 dev-toolkit/
-├── src/           # Source code
-├── tests/         # Test files
-├── examples/      # Example usage and testbeds
-└── docs/          # Documentation
+├── .github/workflows/  # GitHub Actions CI/CD
+├── src/               # Source code
+├── tests/             # Test files
+├── examples/          # Example usage and testbeds
+├── docs/              # Documentation
+└── pyproject.toml     # Project configuration and dependencies
 ```
+
+## Development Workflow
+
+1. **Before starting work:**
+   ```bash
+   # Activate virtual environment
+   source .venv/bin/activate
+   
+   # Install/update dependencies
+   pip install -e .[dev]
+   ```
+
+2. **During development:**
+   ```bash
+   # Format your code
+   ruff format .
+   
+   # Check for issues
+   ruff check . --fix
+   
+   # Run tests
+   pytest
+   ```
+
+3. **Before committing:**
+   ```bash
+   # Run full quality check
+   ruff check . && \
+   ruff format --check . && \
+   bandit -r . --severity-level medium && \
+   pip-audit --desc && \
+   pytest --cov=src --cov-report=term-missing
+   ```
 
 ## Development
 
-- Use `pytest` for running tests
-- Use `ruff` for linting and formatting
+- Use `ruff` for linting and formatting (configured in `pyproject.toml`)
+- Use `pytest` for running tests with coverage
+- Use `bandit` for security scanning
 - Follow PEP 8 style guidelines
+- All development dependencies are managed in `pyproject.toml`
 
 ## License
 

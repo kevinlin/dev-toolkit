@@ -38,9 +38,14 @@ ENV/
 
 # Testing
 .coverage
+coverage.xml
 htmlcov/
 .pytest_cache/
 .tox/
+
+# Security and audit reports
+bandit-report.json
+pip-audit-report.json
 
 # Distribution
 *.manifest

@@ -7,18 +7,69 @@ authors = [
 ]
 requires-python = ">=3.8"
 readme = "README.md"
-dependencies = []
+dependencies = [
+    "Jinja2~=3.1.4",
+    "PyYAML~=6.0.2",
+    "python-dotenv~=1.0.0",
+    "beautifulsoup4~=4.12.0",
+    "html2text~=2020.1.16",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest~=7.4.0",
+    "pytest-cov~=4.1.0",
+    "ruff~=0.1.0",
+    "bandit[toml]~=1.7.5",
+    "pip-audit~=2.6.0",
+]
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
+include = [
+    "*.py",
+    "src/**/*.py",
+    "src/**/*.j2",
+]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
-addopts = "-v --cov=src"
+addopts = "-v --cov=src --cov-report=term-missing --cov-report=xml"
 
 [tool.ruff]
 line-length = 100
 target-version = "py38"
-select = ["E", "F", "B", "I", "UP"] 
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "B",    # flake8-bugbear
+    "I",    # isort
+    "UP",   # pyupgrade
+    "C4",   # flake8-comprehensions
+    "SIM",  # flake8-simplify
+    "TCH",  # flake8-type-checking
+]
+ignore = [
+    "E501",  # line too long (handled by line-length)
+]
+fix = true
+show-fixes = true
+
+[tool.ruff.per-file-ignores]
+"tests/*" = ["S101"]  # Allow assert statements in tests
+
+[tool.ruff.isort]
+known-first-party = ["src"]
+
+[tool.bandit]
+exclude_dirs = ["tests", ".venv", "venv"]
+skips = ["B101"]  # Skip assert_used test since we allow asserts in tests
+
+[tool.bandit.assert_used]
+skips = ["*_test.py", "test_*.py"] 

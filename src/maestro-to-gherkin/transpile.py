@@ -4,7 +4,7 @@ from jinja2 import Environment, FileSystemLoader
 
 # Load Maestro YAML file with multiple documents
 def load_yaml(file_path):
-    with open(file_path, 'r') as file:
+    with open(file_path) as file:
         return list(yaml.safe_load_all(file))  # Load all YAML documents
 
 
