@@ -26,7 +26,7 @@ class TestCacheManager(unittest.TestCase):
     def setUp(self):
         """Set up test environment with temporary directory"""
         self.test_dir = tempfile.mkdtemp()
-        self.provider = 'gmail'
+        self.provider = "gmail"
         self.cache_manager = CacheManager(self.provider, self.test_dir)
 
     def tearDown(self):
@@ -36,11 +36,11 @@ class TestCacheManager(unittest.TestCase):
 
     def test_cache_manager_initialization(self):
         """Test CacheManager initialization"""
-        self.assertEqual(self.cache_manager.provider, 'gmail')
+        self.assertEqual(self.cache_manager.provider, "gmail")
         self.assertEqual(self.cache_manager.output_dir, self.test_dir)
         self.assertEqual(len(self.cache_manager.processed_uids), 0)
 
-        expected_cache_file = os.path.join(self.test_dir, 'gmail.cache.json')
+        expected_cache_file = os.path.join(self.test_dir, "gmail.cache.json")
         self.assertEqual(self.cache_manager.cache_file, expected_cache_file)
 
         # Test output directory is created
@@ -48,18 +48,18 @@ class TestCacheManager(unittest.TestCase):
 
     def test_cache_manager_with_icloud_provider(self):
         """Test CacheManager with iCloud provider"""
-        icloud_cache_manager = CacheManager('icloud', self.test_dir)
+        icloud_cache_manager = CacheManager("icloud", self.test_dir)
 
-        self.assertEqual(icloud_cache_manager.provider, 'icloud')
-        expected_cache_file = os.path.join(self.test_dir, 'icloud.cache.json')
+        self.assertEqual(icloud_cache_manager.provider, "icloud")
+        expected_cache_file = os.path.join(self.test_dir, "icloud.cache.json")
         self.assertEqual(icloud_cache_manager.cache_file, expected_cache_file)
 
     def test_ensure_output_directory_creation(self):
         """Test that output directory is created if it doesn't exist"""
-        new_test_dir = os.path.join(self.test_dir, 'new_dir')
+        new_test_dir = os.path.join(self.test_dir, "new_dir")
         self.assertFalse(os.path.exists(new_test_dir))
 
-        cache_manager = CacheManager('gmail', new_test_dir)
+        CacheManager("gmail", new_test_dir)
         self.assertTrue(os.path.exists(new_test_dir))
 
     def test_load_cache_no_existing_file(self):
@@ -67,13 +67,13 @@ class TestCacheManager(unittest.TestCase):
         self.cache_manager.load_cache()
 
         self.assertEqual(len(self.cache_manager.processed_uids), 0)
-        self.assertIsNone(self.cache_manager.cache_metadata['last_updated'])
-        self.assertEqual(self.cache_manager.cache_metadata['total_processed'], 0)
+        self.assertIsNone(self.cache_manager.cache_metadata["last_updated"])
+        self.assertEqual(self.cache_manager.cache_metadata["total_processed"], 0)
 
     def test_save_and_load_cache_basic(self):
         """Test basic save and load cache functionality"""
         # Add some UIDs to cache
-        test_uids = ['uid1', 'uid2', 'uid3']
+        test_uids = ["uid1", "uid2", "uid3"]
         for uid in test_uids:
             self.cache_manager.mark_processed(uid)
 
@@ -89,36 +89,36 @@ class TestCacheManager(unittest.TestCase):
 
         # Verify loaded data
         self.assertEqual(new_cache_manager.processed_uids, set(test_uids))
-        self.assertIsNotNone(new_cache_manager.cache_metadata['last_updated'])
-        self.assertEqual(new_cache_manager.cache_metadata['total_processed'], 3)
+        self.assertIsNotNone(new_cache_manager.cache_metadata["last_updated"])
+        self.assertEqual(new_cache_manager.cache_metadata["total_processed"], 3)
 
     def test_save_cache_file_structure(self):
         """Test that saved cache file has correct JSON structure"""
-        test_uids = ['uid1', 'uid2', 'uid3']
+        test_uids = ["uid1", "uid2", "uid3"]
         for uid in test_uids:
             self.cache_manager.mark_processed(uid)
 
         self.cache_manager.save_cache()
 
         # Read and verify JSON structure
-        with open(self.cache_manager.cache_file, encoding='utf-8') as f:
+        with open(self.cache_manager.cache_file, encoding="utf-8") as f:
             cache_data = json.load(f)
 
-        self.assertIn('processed_uids', cache_data)
-        self.assertIn('last_updated', cache_data)
-        self.assertIn('total_processed', cache_data)
+        self.assertIn("processed_uids", cache_data)
+        self.assertIn("last_updated", cache_data)
+        self.assertIn("total_processed", cache_data)
 
-        self.assertIsInstance(cache_data['processed_uids'], list)
-        self.assertEqual(set(cache_data['processed_uids']), set(test_uids))
-        self.assertEqual(cache_data['total_processed'], 3)
-        self.assertIsNotNone(cache_data['last_updated'])
+        self.assertIsInstance(cache_data["processed_uids"], list)
+        self.assertEqual(set(cache_data["processed_uids"]), set(test_uids))
+        self.assertEqual(cache_data["total_processed"], 3)
+        self.assertIsNotNone(cache_data["last_updated"])
 
         # Verify timestamp format
-        datetime.datetime.fromisoformat(cache_data['last_updated'])
+        datetime.datetime.fromisoformat(cache_data["last_updated"])
 
     def test_is_processed_functionality(self):
         """Test UID processing check functionality"""
-        test_uid = 'test_uid_123'
+        test_uid = "test_uid_123"
 
         # Initially should not be processed
         self.assertFalse(self.cache_manager.is_processed(test_uid))
@@ -131,28 +131,28 @@ class TestCacheManager(unittest.TestCase):
 
     def test_mark_processed_functionality(self):
         """Test marking UIDs as processed"""
-        test_uids = ['uid1', 'uid2', 'uid3', 'uid1']  # Duplicate uid1
+        test_uids = ["uid1", "uid2", "uid3", "uid1"]  # Duplicate uid1
 
         for uid in test_uids:
             self.cache_manager.mark_processed(uid)
 
         # Should contain unique UIDs only
         self.assertEqual(len(self.cache_manager.processed_uids), 3)
-        self.assertEqual(self.cache_manager.processed_uids, {'uid1', 'uid2', 'uid3'})
+        self.assertEqual(self.cache_manager.processed_uids, {"uid1", "uid2", "uid3"})
 
     def test_cache_stats(self):
         """Test cache statistics functionality"""
         # Add some UIDs
-        uids = ['uid1', 'uid2', 'uid3']
+        uids = ["uid1", "uid2", "uid3"]
         for uid in uids:
             self.cache_manager.mark_processed(uid)
 
         stats = self.cache_manager.get_cache_stats()
 
-        self.assertEqual(stats['total_cached_uids'], 3)
-        self.assertEqual(stats['provider'], 'gmail')
-        self.assertIn('cache_file', stats)
-        self.assertIn('last_updated', stats)
+        self.assertEqual(stats["total_cached_uids"], 3)
+        self.assertEqual(stats["provider"], "gmail")
+        self.assertIn("cache_file", stats)
+        self.assertIn("last_updated", stats)
 
     def test_content_hash_operations(self):
         """Test content hash addition and checking"""
@@ -204,8 +204,8 @@ class TestCacheManager(unittest.TestCase):
     def test_cache_save_and_load_with_content_hashes(self):
         """Test saving and loading cache with content hashes"""
         # Add UIDs and content hashes
-        uids = ['uid1', 'uid2']
-        hashes = ['hash1', 'hash2', 'hash3']
+        uids = ["uid1", "uid2"]
+        hashes = ["hash1", "hash2", "hash3"]
 
         for uid in uids:
             self.cache_manager.mark_processed(uid)
@@ -216,7 +216,7 @@ class TestCacheManager(unittest.TestCase):
         self.cache_manager.save_cache()
 
         # Create new cache manager to test loading
-        new_cache_manager = CacheManager('gmail', self.test_dir)
+        new_cache_manager = CacheManager("gmail", self.test_dir)
         new_cache_manager.load_cache()
 
         # Verify UIDs and content hashes were loaded
@@ -230,8 +230,8 @@ class TestCacheManager(unittest.TestCase):
     def test_cache_stats_with_content_hashes(self):
         """Test cache statistics with content hashes"""
         # Add UIDs and content hashes
-        uids = ['uid1', 'uid2', 'uid3']
-        hashes = ['hash1', 'hash2']
+        uids = ["uid1", "uid2", "uid3"]
+        hashes = ["hash1", "hash2"]
 
         for uid in uids:
             self.cache_manager.mark_processed(uid)
@@ -240,9 +240,9 @@ class TestCacheManager(unittest.TestCase):
 
         stats = self.cache_manager.get_cache_stats()
 
-        self.assertEqual(stats['total_cached_uids'], 3)
-        self.assertEqual(stats['total_cached_content_hashes'], 2)
-        self.assertEqual(stats['provider'], 'gmail')
+        self.assertEqual(stats["total_cached_uids"], 3)
+        self.assertEqual(stats["total_cached_content_hashes"], 2)
+        self.assertEqual(stats["provider"], "gmail")
 
     def test_content_hash_isolation(self):
         """Test that get_content_hashes returns a copy, not the original set"""
@@ -262,7 +262,7 @@ class TestCacheManager(unittest.TestCase):
     def test_cache_corruption_recovery_with_content_hashes(self):
         """Test cache recovery when file is corrupted, including content hashes"""
         # Create corrupted cache file
-        with open(self.cache_manager.cache_file, 'w') as f:
+        with open(self.cache_manager.cache_file, "w") as f:
             f.write("invalid json content")
 
         # Loading should recover gracefully
@@ -273,30 +273,30 @@ class TestCacheManager(unittest.TestCase):
         self.assertEqual(len(self.cache_manager.get_content_hashes()), 0)
 
         # Should be able to add new data
-        self.cache_manager.mark_processed('test_uid')
-        self.cache_manager.add_content_hash('test_hash')
+        self.cache_manager.mark_processed("test_uid")
+        self.cache_manager.add_content_hash("test_hash")
 
-        self.assertTrue(self.cache_manager.is_processed('test_uid'))
-        self.assertTrue(self.cache_manager.is_content_duplicate('test_hash'))
+        self.assertTrue(self.cache_manager.is_processed("test_uid"))
+        self.assertTrue(self.cache_manager.is_content_duplicate("test_hash"))
 
     def test_load_corrupted_cache_file(self):
         """Test handling of corrupted cache file"""
         # Create corrupted cache file
-        with open(self.cache_manager.cache_file, 'w') as f:
-            f.write('invalid json content')
+        with open(self.cache_manager.cache_file, "w") as f:
+            f.write("invalid json content")
 
         # Should handle corruption gracefully
         self.cache_manager.load_cache()
 
         # Should start with empty cache
         self.assertEqual(len(self.cache_manager.processed_uids), 0)
-        self.assertEqual(self.cache_manager.cache_metadata['total_processed'], 0)
+        self.assertEqual(self.cache_manager.cache_metadata["total_processed"], 0)
 
     def test_load_cache_invalid_structure(self):
         """Test handling of cache file with invalid structure"""
         # Create cache file with invalid structure
-        invalid_data = ['not', 'a', 'dict']
-        with open(self.cache_manager.cache_file, 'w') as f:
+        invalid_data = ["not", "a", "dict"]
+        with open(self.cache_manager.cache_file, "w") as f:
             json.dump(invalid_data, f)
 
         # Should handle invalid structure gracefully
@@ -309,11 +309,11 @@ class TestCacheManager(unittest.TestCase):
         """Test handling of cache file with invalid UIDs type"""
         # Create cache file with invalid UIDs type
         invalid_data = {
-            'processed_uids': 'not_a_list',
-            'last_updated': '2024-01-01T00:00:00',
-            'total_processed': 1
+            "processed_uids": "not_a_list",
+            "last_updated": "2024-01-01T00:00:00",
+            "total_processed": 1,
         }
-        with open(self.cache_manager.cache_file, 'w') as f:
+        with open(self.cache_manager.cache_file, "w") as f:
             json.dump(invalid_data, f)
 
         # Should handle invalid UIDs type gracefully
@@ -325,27 +325,27 @@ class TestCacheManager(unittest.TestCase):
     def test_cache_backup_on_save(self):
         """Test that cache creates backup when overwriting existing file"""
         # Create initial cache
-        self.cache_manager.mark_processed('uid1')
+        self.cache_manager.mark_processed("uid1")
         self.cache_manager.save_cache()
 
         # Add more data and save again
-        self.cache_manager.mark_processed('uid2')
+        self.cache_manager.mark_processed("uid2")
         self.cache_manager.save_cache()
 
         # Check that backup file exists
-        backup_file = self.cache_manager.cache_file + '.bak'
+        backup_file = self.cache_manager.cache_file + ".bak"
         self.assertTrue(os.path.exists(backup_file))
 
         # Verify backup contains original data
-        with open(backup_file, encoding='utf-8') as f:
+        with open(backup_file, encoding="utf-8") as f:
             backup_data = json.load(f)
 
-        self.assertEqual(backup_data['processed_uids'], ['uid1'])
-        self.assertEqual(backup_data['total_processed'], 1)
+        self.assertEqual(backup_data["processed_uids"], ["uid1"])
+        self.assertEqual(backup_data["total_processed"], 1)
 
     def test_atomic_save_operation(self):
         """Test that save operation is atomic (uses temp file)"""
-        self.cache_manager.mark_processed('uid1')
+        self.cache_manager.mark_processed("uid1")
 
         # Mock file operations to simulate interruption
         original_rename = os.rename
@@ -354,22 +354,21 @@ class TestCacheManager(unittest.TestCase):
         def mock_rename(src, dst):
             nonlocal call_count
             call_count += 1
-            if call_count == 1 and 'tmp' in src:
+            if call_count == 1 and "tmp" in src:
                 # Simulate interruption during atomic operation
                 raise OSError("Simulated interruption")
             return original_rename(src, dst)
 
-        with patch('os.rename', side_effect=mock_rename):
-            with self.assertRaises(OSError):
-                self.cache_manager.save_cache()
+        with patch("os.rename", side_effect=mock_rename), self.assertRaises(OSError):
+            self.cache_manager.save_cache()
 
         # Verify temp file is cleaned up
-        temp_file = self.cache_manager.cache_file + '.tmp'
+        temp_file = self.cache_manager.cache_file + ".tmp"
         self.assertFalse(os.path.exists(temp_file))
 
     def test_save_cache_with_unicode_content(self):
         """Test saving cache with Unicode UIDs"""
-        unicode_uids = ['uid_测试', 'uid_ñoño', 'uid_emoji_😀']
+        unicode_uids = ["uid_测试", "uid_ñoño", "uid_emoji_😀"]
 
         for uid in unicode_uids:
             self.cache_manager.mark_processed(uid)
@@ -391,7 +390,7 @@ class TestCacheManager(unittest.TestCase):
         start_time = time.time()
 
         for i in range(large_uid_count):
-            self.cache_manager.mark_processed(f'uid_{i:06d}')
+            self.cache_manager.mark_processed(f"uid_{i:06d}")
 
         add_time = time.time() - start_time
 
@@ -416,7 +415,7 @@ class TestCacheManager(unittest.TestCase):
 
     def test_cache_sorted_uids_consistency(self):
         """Test that cache saves UIDs in sorted order for consistency"""
-        unsorted_uids = ['uid_c', 'uid_a', 'uid_b', 'uid_10', 'uid_2']
+        unsorted_uids = ["uid_c", "uid_a", "uid_b", "uid_10", "uid_2"]
 
         for uid in unsorted_uids:
             self.cache_manager.mark_processed(uid)
@@ -424,13 +423,13 @@ class TestCacheManager(unittest.TestCase):
         self.cache_manager.save_cache()
 
         # Read cache file directly
-        with open(self.cache_manager.cache_file, encoding='utf-8') as f:
+        with open(self.cache_manager.cache_file, encoding="utf-8") as f:
             cache_data = json.load(f)
 
         # Verify UIDs are sorted
         expected_sorted = sorted(unsorted_uids)
-        self.assertEqual(cache_data['processed_uids'], expected_sorted)
+        self.assertEqual(cache_data["processed_uids"], expected_sorted)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

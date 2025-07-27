@@ -15,10 +15,13 @@ from typing import Set
 try:
     import html2text
     from bs4 import BeautifulSoup
+
     HTML_PROCESSING_AVAILABLE = True
 except ImportError:
     HTML_PROCESSING_AVAILABLE = False
-    print("Warning: HTML processing libraries not available. Install with: pip install beautifulsoup4 html2text")
+    print(
+        "Warning: HTML processing libraries not available. Install with: pip install beautifulsoup4 html2text"
+    )
 
 
 class ContentProcessor:
@@ -70,12 +73,12 @@ class ContentProcessor:
                         # Decode bytes to string
                         if isinstance(payload, bytes):
                             # Try to get charset from content type
-                            charset = part.get_content_charset() or 'utf-8'
+                            charset = part.get_content_charset() or "utf-8"
                             try:
                                 text_content = payload.decode(charset)
                             except (UnicodeDecodeError, LookupError):
                                 # Fallback to utf-8 with error handling
-                                text_content = payload.decode('utf-8', errors='ignore')
+                                text_content = payload.decode("utf-8", errors="ignore")
                         else:
                             text_content = str(payload)
 
@@ -103,11 +106,11 @@ class ContentProcessor:
                 if payload is not None:
                     # Decode bytes to string
                     if isinstance(payload, bytes):
-                        charset = message.get_content_charset() or 'utf-8'
+                        charset = message.get_content_charset() or "utf-8"
                         try:
                             body_content = payload.decode(charset)
                         except (UnicodeDecodeError, LookupError):
-                            body_content = payload.decode('utf-8', errors='ignore')
+                            body_content = payload.decode("utf-8", errors="ignore")
                     else:
                         body_content = str(payload)
 
@@ -145,7 +148,7 @@ class ContentProcessor:
         try:
             # First, use BeautifulSoup for robust HTML parsing and cleanup
             if HTML_PROCESSING_AVAILABLE:
-                soup = BeautifulSoup(html_content, 'html.parser')
+                soup = BeautifulSoup(html_content, "html.parser")
 
                 # Remove script and style elements
                 for script in soup(["script", "style"]):
@@ -162,7 +165,7 @@ class ContentProcessor:
                     text_content = soup.get_text()
             else:
                 # Fallback: basic HTML tag removal using regex
-                text_content = re.sub(r'<[^>]+>', '', html_content)
+                text_content = re.sub(r"<[^>]+>", "", html_content)
 
             return text_content
 
@@ -170,7 +173,7 @@ class ContentProcessor:
             print(f"Warning: Error converting HTML to text: {str(e)}")
             # Fallback: basic HTML tag removal
             try:
-                return re.sub(r'<[^>]+>', '', html_content)
+                return re.sub(r"<[^>]+>", "", html_content)
             except Exception:
                 return html_content
 
@@ -188,69 +191,60 @@ class ContentProcessor:
             return ""
 
         try:
-            lines = content.split('\n')
+            lines = content.split("\n")
             cleaned_lines = []
 
             # Comprehensive patterns for quoted replies and forwards
             quote_patterns = [
                 # Basic quote patterns
-                r'^>.*',  # Lines starting with >
-                r'^\s*>.*',  # Lines starting with whitespace and >
-                r'^\s*>\s*>.*',  # Multiple levels of quoting
-
+                r"^>.*",  # Lines starting with >
+                r"^\s*>.*",  # Lines starting with whitespace and >
+                r"^\s*>\s*>.*",  # Multiple levels of quoting
                 # "On ... wrote:" patterns (various formats)
-                r'^On .* wrote:.*',  # "On [date] [person] wrote:"
-                r'^On .* at .* wrote:.*',  # "On [date] at [time] [person] wrote:"
-                r'^On .*, .* wrote:.*',  # "On [day], [date] [person] wrote:"
-                r'^\d{1,2}/\d{1,2}/\d{2,4}.*wrote:.*',  # Date formats with "wrote:"
-                r'^\w+,\s+\w+\s+\d+,\s+\d{4}.*wrote:.*',  # "Monday, January 15, 2024 ... wrote:"
-
+                r"^On .* wrote:.*",  # "On [date] [person] wrote:"
+                r"^On .* at .* wrote:.*",  # "On [date] at [time] [person] wrote:"
+                r"^On .*, .* wrote:.*",  # "On [day], [date] [person] wrote:"
+                r"^\d{1,2}/\d{1,2}/\d{2,4}.*wrote:.*",  # Date formats with "wrote:"
+                r"^\w+,\s+\w+\s+\d+,\s+\d{4}.*wrote:.*",  # "Monday, January 15, 2024 ... wrote:"
                 # Email header patterns (forwards and replies)
-                r'^From:.*',  # Email headers in forwards
-                r'^To:.*',
-                r'^Cc:.*',
-                r'^Bcc:.*',
-                r'^Subject:.*',
-                r'^Date:.*',
-                r'^Sent:.*',
-                r'^Reply-To:.*',
-
+                r"^From:.*",  # Email headers in forwards
+                r"^To:.*",
+                r"^Cc:.*",
+                r"^Bcc:.*",
+                r"^Subject:.*",
+                r"^Date:.*",
+                r"^Sent:.*",
+                r"^Reply-To:.*",
                 # Outlook-style patterns
-                r'^\s*-----Original Message-----.*',  # Outlook original message
-                r'^\s*________________________________.*',  # Outlook separator line
-                r'^\s*From: .*',  # Forward headers with spacing
-                r'^\s*Sent: .*',
-                r'^\s*To: .*',
-                r'^\s*Subject: .*',
-                r'^\s*Date: .*',
-
+                r"^\s*-----Original Message-----.*",  # Outlook original message
+                r"^\s*________________________________.*",  # Outlook separator line
+                r"^\s*From: .*",  # Forward headers with spacing
+                r"^\s*Sent: .*",
+                r"^\s*To: .*",
+                r"^\s*Subject: .*",
+                r"^\s*Date: .*",
                 # Gmail-style patterns
-                r'^\s*On .* <.*@.*> wrote:.*',  # Gmail "On [date] <email> wrote:"
-                r'^\d{4}-\d{2}-\d{2} \d{2}:\d{2} GMT.*wrote:.*',  # Gmail timestamp format
-
+                r"^\s*On .* <.*@.*> wrote:.*",  # Gmail "On [date] <email> wrote:"
+                r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2} GMT.*wrote:.*",  # Gmail timestamp format
                 # Apple Mail patterns
-                r'^Begin forwarded message:.*',  # Apple Mail forward
-                r'^Forwarded message:.*',
-                r'^Message forwarded.*',
-
+                r"^Begin forwarded message:.*",  # Apple Mail forward
+                r"^Forwarded message:.*",
+                r"^Message forwarded.*",
                 # Other common patterns
-                r'^\s*\[.*\] wrote:.*',  # [Name] wrote:
-                r'^\s*<.*@.*> wrote:.*',  # <email@domain.com> wrote:
+                r"^\s*\[.*\] wrote:.*",  # [Name] wrote:
+                r"^\s*<.*@.*> wrote:.*",  # <email@domain.com> wrote:
                 r'^\s*".*" <.*@.*> wrote:.*',  # "Name" <email> wrote:
-
                 # Signature separators
-                r'^\s*--\s*$',  # Standard signature separator
-                r'^\s*---+\s*$',  # Dash separators
-
+                r"^\s*--\s*$",  # Standard signature separator
+                r"^\s*---+\s*$",  # Dash separators
                 # Mobile email patterns
-                r'^Sent from my .*',  # "Sent from my iPhone/Android"
-                r'^Get Outlook for .*',  # Outlook mobile signature
-
+                r"^Sent from my .*",  # "Sent from my iPhone/Android"
+                r"^Get Outlook for .*",  # Outlook mobile signature
                 # International patterns
-                r'.*\s+schrieb:.*',  # German "wrote"
-                r'.*\s+escribió:.*',  # Spanish "wrote"
-                r'.*\s+écrit:.*',  # French "wrote"
-                r'.*\s+scrisse:.*',  # Italian "wrote"
+                r".*\s+schrieb:.*",  # German "wrote"
+                r".*\s+escribió:.*",  # Spanish "wrote"
+                r".*\s+écrit:.*",  # French "wrote"
+                r".*\s+scrisse:.*",  # Italian "wrote"
             ]
 
             # Compile patterns for efficiency
@@ -258,9 +252,9 @@ class ContentProcessor:
 
             # Additional patterns to detect start of quoted sections
             quote_start_patterns = [
-                re.compile(r'^\s*[-=_]{3,}\s*$'),  # Lines with multiple dashes/equals/underscores
-                re.compile(r'^\s*\*{3,}\s*$'),     # Lines with multiple asterisks
-                re.compile(r'^\s*#{3,}\s*$'),      # Lines with multiple hash symbols
+                re.compile(r"^\s*[-=_]{3,}\s*$"),  # Lines with multiple dashes/equals/underscores
+                re.compile(r"^\s*\*{3,}\s*$"),  # Lines with multiple asterisks
+                re.compile(r"^\s*#{3,}\s*$"),  # Lines with multiple hash symbols
             ]
 
             in_quoted_section = False
@@ -295,19 +289,27 @@ class ContentProcessor:
 
                         if next_content_line:
                             # Check if the next line looks like original content
-                            is_next_quote = any(pattern.match(next_content_line) for pattern in compiled_patterns)
-                            if not is_next_quote and len(next_content_line.strip()) > 5:  # Reduced threshold
+                            is_next_quote = any(
+                                pattern.match(next_content_line) for pattern in compiled_patterns
+                            )
+                            if (
+                                not is_next_quote and len(next_content_line.strip()) > 5
+                            ):  # Reduced threshold
                                 # Looks like we're back to original content
                                 in_quoted_section = False
 
                     # If we're still in quoted section, check if this line should be kept
                     if in_quoted_section:
                         # Check if this line looks like original content
-                        if (line.strip() and
-                            len(line.strip()) > 10 and
-                            not any(pattern.match(line) for pattern in compiled_patterns) and
-                            not re.match(r'^\s*(From|To|Subject|Date|Sent|Cc|Bcc):', line, re.IGNORECASE) and
-                            not line.strip().startswith('>')):  # Don't keep lines that start with >
+                        if (
+                            line.strip()
+                            and len(line.strip()) > 10
+                            and not any(pattern.match(line) for pattern in compiled_patterns)
+                            and not re.match(
+                                r"^\s*(From|To|Subject|Date|Sent|Cc|Bcc):", line, re.IGNORECASE
+                            )
+                            and not line.strip().startswith(">")
+                        ):  # Don't keep lines that start with >
                             # This might be original content mixed in, keep it
                             in_quoted_section = False
                         else:
@@ -318,14 +320,24 @@ class ContentProcessor:
                     cleaned_lines.append(line)
 
             # Join lines and do a final cleanup pass
-            result = '\n'.join(cleaned_lines)
+            result = "\n".join(cleaned_lines)
 
             # Remove any remaining quoted blocks that might have been missed
             # Look for patterns like "On ... wrote:" followed by indented content
-            result = re.sub(r'\n\s*On\s+.*wrote:\s*\n(.*\n)*?(?=\n\S|\n*$)', '\n', result, flags=re.IGNORECASE | re.MULTILINE)
+            result = re.sub(
+                r"\n\s*On\s+.*wrote:\s*\n(.*\n)*?(?=\n\S|\n*$)",
+                "\n",
+                result,
+                flags=re.IGNORECASE | re.MULTILINE,
+            )
 
             # Remove forwarded message blocks
-            result = re.sub(r'\n\s*-+\s*Forwarded message\s*-+.*?\n(.*\n)*?(?=\n\S|\n*$)', '\n', result, flags=re.IGNORECASE | re.MULTILINE)
+            result = re.sub(
+                r"\n\s*-+\s*Forwarded message\s*-+.*?\n(.*\n)*?(?=\n\S|\n*$)",
+                "\n",
+                result,
+                flags=re.IGNORECASE | re.MULTILINE,
+            )
 
             return result
 
@@ -347,36 +359,33 @@ class ContentProcessor:
             return ""
 
         try:
-            lines = content.split('\n')
+            lines = content.split("\n")
             cleaned_lines = []
             greeting_found = False
 
             # Patterns for opening greetings - more precise patterns
             greeting_patterns = [
                 # Standard greetings with names (ensure they end the line after name/punctuation)
-                r'^(Hi|Hello|Hey|Dear)\s+[A-Za-z][A-Za-z\s\'.-]*[,:]?\s*$',  # Hi Krishna, Hello Ben, Dear Raina
-
+                r"^(Hi|Hello|Hey|Dear)\s+[A-Za-z][A-Za-z\s\'.-]*[,:]?\s*$",  # Hi Krishna, Hello Ben, Dear Raina
                 # Formal greetings
-                r'^Dear\s+(Sir|Madam|Sir\s+or\s+Madam)[,:]?\s*$',  # Dear Sir or Madam
-                r'^To\s+whom\s+it\s+may\s+concern[,:]?\s*$',  # To whom it may concern
-
+                r"^Dear\s+(Sir|Madam|Sir\s+or\s+Madam)[,:]?\s*$",  # Dear Sir or Madam
+                r"^To\s+whom\s+it\s+may\s+concern[,:]?\s*$",  # To whom it may concern
                 # Group greetings
-                r'^(Hi|Hello|Hey)\s+(all|everyone|team|folks|guys)[,:]?\s*$',  # Hi all, Hello everyone
-                r'^(Hi|Hello|Hey)\s+there[,:!.]?\s*$',  # Hi there
-
+                r"^(Hi|Hello|Hey)\s+(all|everyone|team|folks|guys)[,:]?\s*$",  # Hi all, Hello everyone
+                r"^(Hi|Hello|Hey)\s+there[,:!.]?\s*$",  # Hi there
                 # Time-based greetings
-                r'^(Good\s+morning|Good\s+afternoon|Good\s+evening)[,:]?\s*$',
-                r'^(Good\s+morning|Good\s+afternoon|Good\s+evening)\s+[A-Za-z][A-Za-z\s\'.-]*[,:]?\s*$',
-
+                r"^(Good\s+morning|Good\s+afternoon|Good\s+evening)[,:]?\s*$",
+                r"^(Good\s+morning|Good\s+afternoon|Good\s+evening)\s+[A-Za-z][A-Za-z\s\'.-]*[,:]?\s*$",
                 # Simple greetings
-                r'^(Hi|Hello|Hey)[,:]?\s*$',  # Just "Hi," or "Hello"
-
+                r"^(Hi|Hello|Hey)[,:]?\s*$",  # Just "Hi," or "Hello"
                 # Multiple name greetings
-                r'^(Hi|Hello|Hey|Dear)\s+[A-Za-z][A-Za-z\s\'.-]*(\s+and\s+[A-Za-z][A-Za-z\s\'.-]*)+[,:]?\s*$',  # Hi John and Jane
+                r"^(Hi|Hello|Hey|Dear)\s+[A-Za-z][A-Za-z\s\'.-]*(\s+and\s+[A-Za-z][A-Za-z\s\'.-]*)+[,:]?\s*$",  # Hi John and Jane
             ]
 
             # Compile patterns for efficiency
-            compiled_greeting_patterns = [re.compile(pattern, re.IGNORECASE) for pattern in greeting_patterns]
+            compiled_greeting_patterns = [
+                re.compile(pattern, re.IGNORECASE) for pattern in greeting_patterns
+            ]
 
             # Process lines and remove greeting lines at the very beginning only
             for i, line in enumerate(lines):
@@ -384,7 +393,9 @@ class ContentProcessor:
 
                 # Only check for greetings in the first few non-empty lines
                 if i < 3 and line_stripped:  # Only check first 3 non-empty lines for greetings
-                    is_greeting = any(pattern.match(line_stripped) for pattern in compiled_greeting_patterns)
+                    is_greeting = any(
+                        pattern.match(line_stripped) for pattern in compiled_greeting_patterns
+                    )
                     if is_greeting:
                         greeting_found = True
                         continue  # Skip greeting lines
@@ -396,7 +407,7 @@ class ContentProcessor:
                 # Keep all other lines
                 cleaned_lines.append(line)
 
-            return '\n'.join(cleaned_lines)
+            return "\n".join(cleaned_lines)
 
         except Exception as e:
             print(f"Warning: Error stripping opening greetings: {str(e)}")
@@ -416,38 +427,36 @@ class ContentProcessor:
             return ""
 
         try:
-            lines = content.split('\n')
+            lines = content.split("\n")
             cleaned_lines = []
 
             # Patterns for signature detection
             signature_patterns = [
                 # Kevin Lin's specific signature patterns
-                r'^(Best\s+regards|Sincerely\s+yours|Regards|Sincerely)[,:]?\s*$',
-                r'^Kevin\s+Lin\s*$',
-                r'^Lin\s+Yun\s*$',
-
+                r"^(Best\s+regards|Sincerely\s+yours|Regards|Sincerely)[,:]?\s*$",
+                r"^Kevin\s+Lin\s*$",
+                r"^Lin\s+Yun\s*$",
                 # Common signature closings
-                r'^(Best|Regards|Thanks|Thank\s+you|Cheers|Yours\s+truly|Yours\s+sincerely)[,:]?\s*$',
-                r'^(Kind\s+regards|Warm\s+regards|With\s+regards)[,:]?\s*$',
-                r'^(Best\s+wishes|Many\s+thanks|Thank\s+you\s+very\s+much)[,:]?\s*$',
-
+                r"^(Best|Regards|Thanks|Thank\s+you|Cheers|Yours\s+truly|Yours\s+sincerely)[,:]?\s*$",
+                r"^(Kind\s+regards|Warm\s+regards|With\s+regards)[,:]?\s*$",
+                r"^(Best\s+wishes|Many\s+thanks|Thank\s+you\s+very\s+much)[,:]?\s*$",
                 # Signature separators
-                r'^\s*--\s*$',  # Standard signature separator
-                r'^\s*---+\s*$',  # Multiple dashes
-                r'^\s*_{3,}\s*$',  # Multiple underscores
-
+                r"^\s*--\s*$",  # Standard signature separator
+                r"^\s*---+\s*$",  # Multiple dashes
+                r"^\s*_{3,}\s*$",  # Multiple underscores
                 # Mobile signatures
-                r'^Sent\s+from\s+my\s+.*$',  # Sent from my iPhone/Android
-                r'^Get\s+Outlook\s+for\s+.*$',  # Get Outlook for iOS/Android
-
+                r"^Sent\s+from\s+my\s+.*$",  # Sent from my iPhone/Android
+                r"^Get\s+Outlook\s+for\s+.*$",  # Get Outlook for iOS/Android
                 # Name-like patterns (common names that might be signatures)
-                r'^[A-Z][a-z]+\s+[A-Z][a-z]+\s*$',  # First Last
-                r'^[A-Z][a-z]+\s+[A-Z]\.\s+[A-Z][a-z]+\s*$',  # First M. Last
-                r'^[A-Z]\.\s+[A-Z][a-z]+\s*$',  # F. Last
+                r"^[A-Z][a-z]+\s+[A-Z][a-z]+\s*$",  # First Last
+                r"^[A-Z][a-z]+\s+[A-Z]\.\s+[A-Z][a-z]+\s*$",  # First M. Last
+                r"^[A-Z]\.\s+[A-Z][a-z]+\s*$",  # F. Last
             ]
 
             # Compile patterns for efficiency
-            compiled_signature_patterns = [re.compile(pattern, re.IGNORECASE) for pattern in signature_patterns]
+            compiled_signature_patterns = [
+                re.compile(pattern, re.IGNORECASE) for pattern in signature_patterns
+            ]
 
             # Work backwards from the end to detect signature blocks
             signature_start_index = len(lines)
@@ -461,7 +470,9 @@ class ContentProcessor:
                     continue
 
                 # Check if this line matches a signature pattern
-                is_signature_line = any(pattern.match(line) for pattern in compiled_signature_patterns)
+                is_signature_line = any(
+                    pattern.match(line) for pattern in compiled_signature_patterns
+                )
 
                 if is_signature_line:
                     # Found a signature line, mark this as potential signature start
@@ -475,7 +486,9 @@ class ContentProcessor:
                             continue  # Skip empty lines
 
                         # Check if previous line is also part of signature
-                        is_prev_signature = any(pattern.match(prev_line) for pattern in compiled_signature_patterns)
+                        is_prev_signature = any(
+                            pattern.match(prev_line) for pattern in compiled_signature_patterns
+                        )
                         if is_prev_signature:
                             signature_start_index = j
                         else:
@@ -495,7 +508,7 @@ class ContentProcessor:
             while cleaned_lines and not cleaned_lines[-1].strip():
                 cleaned_lines.pop()
 
-            return '\n'.join(cleaned_lines)
+            return "\n".join(cleaned_lines)
 
         except Exception as e:
             print(f"Warning: Error stripping signatures: {str(e)}")
@@ -516,21 +529,21 @@ class ContentProcessor:
 
         try:
             # Replace different types of line breaks with standard \n
-            content = re.sub(r'\r\n|\r', '\n', content)
+            content = re.sub(r"\r\n|\r", "\n", content)
 
             # Remove excessive whitespace while preserving paragraph structure
             # Replace multiple spaces with single space
-            content = re.sub(r'[ \t]+', ' ', content)
+            content = re.sub(r"[ \t]+", " ", content)
 
             # Remove leading/trailing whitespace from each line
-            lines = content.split('\n')
+            lines = content.split("\n")
             cleaned_lines = [line.strip() for line in lines]
 
             # Remove all blank lines as requested
             cleaned_lines = [line for line in cleaned_lines if line]
 
             # Join lines back together with single newlines
-            content = '\n'.join(cleaned_lines)
+            content = "\n".join(cleaned_lines)
 
             return content
 
@@ -567,7 +580,7 @@ class ContentProcessor:
 
             # Check if content is mostly non-alphabetic (might be encoded/corrupted)
             alpha_chars = sum(1 for c in cleaned_content if c.isalpha())
-            total_chars = len(cleaned_content.replace(' ', '').replace('\n', '').replace('\t', ''))
+            total_chars = len(cleaned_content.replace(" ", "").replace("\n", "").replace("\t", ""))
 
             if total_chars > 0:
                 alpha_ratio = alpha_chars / total_chars
@@ -577,7 +590,7 @@ class ContentProcessor:
 
             # Check for minimum sentence structure
             # Look for basic punctuation that indicates proper sentences
-            sentence_endings = sum(1 for c in cleaned_content if c in '.!?')
+            sentence_endings = sum(1 for c in cleaned_content if c in ".!?")
             if sentence_endings == 0 and word_count > 50:
                 # Long content without any sentence endings might be corrupted
                 return False
@@ -585,7 +598,9 @@ class ContentProcessor:
             # Check for excessive repetition (might indicate spam or corrupted content)
             if word_count >= 10:
                 # Count unique words vs total words
-                unique_words = set(word.lower() for word in words if len(word) > 2)  # Ignore short words
+                unique_words = {
+                    word.lower() for word in words if len(word) > 2
+                }  # Ignore short words
                 if len(unique_words) > 0:
                     uniqueness_ratio = len(unique_words) / len([w for w in words if len(w) > 2])
                     # If less than 30% of words are unique, might be spam or repetitive content
@@ -594,15 +609,15 @@ class ContentProcessor:
 
             # Check for common spam/system patterns in content
             spam_patterns = [
-                r'click here',
-                r'unsubscribe',
-                r'viagra',
-                r'casino',
-                r'lottery',
-                r'winner',
-                r'congratulations.*won',
-                r'urgent.*action.*required',
-                r'verify.*account.*immediately',
+                r"click here",
+                r"unsubscribe",
+                r"viagra",
+                r"casino",
+                r"lottery",
+                r"winner",
+                r"congratulations.*won",
+                r"urgent.*action.*required",
+                r"verify.*account.*immediately",
             ]
 
             content_lower = cleaned_content.lower()
@@ -644,67 +659,59 @@ class ContentProcessor:
         """
         try:
             # Check common system-generated message indicators
-            subject = message.get('Subject', '').lower()
+            subject = message.get("Subject", "").lower()
 
             # Enhanced system message patterns for comprehensive detection
             system_patterns = [
                 # Auto-replies and out of office
-                r'auto.?reply',
-                r'automatic.*reply',
-                r'out of office',
-                r'vacation.*message',
-                r'away.*message',
-                r'absence.*notification',
-                r'currently.*unavailable',
-
+                r"auto.?reply",
+                r"automatic.*reply",
+                r"out of office",
+                r"vacation.*message",
+                r"away.*message",
+                r"absence.*notification",
+                r"currently.*unavailable",
                 # Delivery notifications and bounces
-                r'delivery.*notification',
-                r'delivery.*status.*notification',
-                r'undelivered.*mail',
-                r'mail.*delivery.*failed',
-                r'message.*undeliverable',
-                r'bounce.*message',
-                r'returned.*mail',
-                r'mail.*system.*error',
-
+                r"delivery.*notification",
+                r"delivery.*status.*notification",
+                r"undelivered.*mail",
+                r"mail.*delivery.*failed",
+                r"message.*undeliverable",
+                r"bounce.*message",
+                r"returned.*mail",
+                r"mail.*system.*error",
                 # Read receipts and confirmations
-                r'read.*receipt',
-                r'delivery.*receipt',
-                r'message.*receipt',
-                r'confirmation.*receipt',
-
+                r"read.*receipt",
+                r"delivery.*receipt",
+                r"message.*receipt",
+                r"confirmation.*receipt",
                 # System daemons and postmaster
-                r'mailer.?daemon',
-                r'postmaster',
-                r'mail.*administrator',
-
+                r"mailer.?daemon",
+                r"postmaster",
+                r"mail.*administrator",
                 # No-reply patterns
-                r'no.?reply',
-                r'do.?not.?reply',
-                r'donot.*reply',
-
+                r"no.?reply",
+                r"do.?not.?reply",
+                r"donot.*reply",
                 # Calendar and meeting notifications
-                r'meeting.*invitation',
-                r'calendar.*notification',
-                r'appointment.*reminder',
-                r'event.*notification',
-
+                r"meeting.*invitation",
+                r"calendar.*notification",
+                r"appointment.*reminder",
+                r"event.*notification",
                 # Security and system alerts
-                r'security.*alert',
-                r'password.*reset',
-                r'account.*notification',
-                r'system.*notification',
-                r'service.*notification',
-
+                r"security.*alert",
+                r"password.*reset",
+                r"account.*notification",
+                r"system.*notification",
+                r"service.*notification",
                 # Subscription and newsletter patterns (only if combined with other indicators)
                 # r'unsubscribe',  # Commented out as it's too broad
                 # r'newsletter',   # Commented out as it's too broad
                 # r'mailing.*list', # Commented out as it's too broad
-
                 # Error messages
-                r'error.*report',
-                r'failure.*notification',
-                r'warning.*message',
+                r"error.*report",
+                r"failure.*notification",
+                r"warning.*message",
             ]
 
             # Check subject line against all patterns
@@ -713,24 +720,24 @@ class ContentProcessor:
                     return True
 
             # Check sender/from field for system addresses
-            from_field = message.get('From', '').lower()
+            from_field = message.get("From", "").lower()
             system_senders = [
-                'mailer-daemon',
-                'postmaster',
-                'noreply',
-                'no-reply',
-                'donotreply',
-                'do-not-reply',
-                'bounce',
-                'auto-reply',
-                'autoreply',
-                'system',
-                'admin',
-                'administrator',
-                'notification',
-                'alerts',
-                'security',
-                'support',
+                "mailer-daemon",
+                "postmaster",
+                "noreply",
+                "no-reply",
+                "donotreply",
+                "do-not-reply",
+                "bounce",
+                "auto-reply",
+                "autoreply",
+                "system",
+                "admin",
+                "administrator",
+                "notification",
+                "alerts",
+                "security",
+                "support",
             ]
 
             for sender in system_senders:
@@ -739,23 +746,23 @@ class ContentProcessor:
 
             # Check for auto-reply and system headers
             auto_reply_headers = [
-                'X-Autoreply',
-                'X-Autorespond',
-                'Auto-Submitted',
-                'X-Auto-Response-Suppress',
-                'X-Mailer-Daemon',
-                'X-Failed-Recipients',
-                'X-Delivery-Status',
+                "X-Autoreply",
+                "X-Autorespond",
+                "Auto-Submitted",
+                "X-Auto-Response-Suppress",
+                "X-Mailer-Daemon",
+                "X-Failed-Recipients",
+                "X-Delivery-Status",
             ]
 
             for header in auto_reply_headers:
                 header_value = message.get(header)
-                if header_value:
-                    # Special handling for Auto-Submitted header
-                    if header == 'Auto-Submitted' and header_value.lower() != 'no':
-                        return True
-                    elif header != 'Auto-Submitted':
-                        return True
+                # Special handling for Auto-Submitted header
+                if header_value and (
+                    (header == "Auto-Submitted" and header_value.lower() != "no")
+                    or (header != "Auto-Submitted")
+                ):
+                    return True
 
             # Check message body for system-generated patterns
             try:
@@ -767,30 +774,32 @@ class ContentProcessor:
                             payload = part.get_payload(decode=True)
                             if payload:
                                 if isinstance(payload, bytes):
-                                    charset = part.get_content_charset() or 'utf-8'
+                                    charset = part.get_content_charset() or "utf-8"
                                     try:
-                                        body_sample = payload.decode(charset)[:500]  # First 500 chars
+                                        body_sample = payload.decode(charset)[
+                                            :500
+                                        ]  # First 500 chars
                                     except (UnicodeDecodeError, LookupError):
-                                        body_sample = payload.decode('utf-8', errors='ignore')[:500]
+                                        body_sample = payload.decode("utf-8", errors="ignore")[:500]
                                 break
                 else:
                     payload = message.get_payload(decode=True)
                     if payload and isinstance(payload, bytes):
-                        charset = message.get_content_charset() or 'utf-8'
+                        charset = message.get_content_charset() or "utf-8"
                         try:
                             body_sample = payload.decode(charset)[:500]
                         except (UnicodeDecodeError, LookupError):
-                            body_sample = payload.decode('utf-8', errors='ignore')[:500]
+                            body_sample = payload.decode("utf-8", errors="ignore")[:500]
 
                 # Check body for system-generated content patterns
                 if body_sample:
                     body_patterns = [
-                        r'this.*is.*an.*automatic.*message',
-                        r'do.*not.*reply.*to.*this.*message',
-                        r'this.*message.*was.*automatically.*generated',
-                        r'undelivered.*mail.*returned.*to.*sender',
-                        r'delivery.*status.*notification',
-                        r'out.*of.*office.*auto.*reply',
+                        r"this.*is.*an.*automatic.*message",
+                        r"do.*not.*reply.*to.*this.*message",
+                        r"this.*message.*was.*automatically.*generated",
+                        r"undelivered.*mail.*returned.*to.*sender",
+                        r"delivery.*status.*notification",
+                        r"out.*of.*office.*auto.*reply",
                     ]
 
                     for pattern in body_patterns:
@@ -826,14 +835,14 @@ class ContentProcessor:
 
             # Convert to lowercase and remove extra whitespace for better duplicate detection
             # This helps catch duplicates that might have minor formatting differences
-            content_for_hashing = re.sub(r'\s+', ' ', normalized_content.lower().strip())
+            content_for_hashing = re.sub(r"\s+", " ", normalized_content.lower().strip())
 
             # Check if content is empty after normalization
             if not content_for_hashing:
                 return ""
 
             # Generate SHA-256 hash
-            content_bytes = content_for_hashing.encode('utf-8')
+            content_bytes = content_for_hashing.encode("utf-8")
             hash_object = hashlib.sha256(content_bytes)
             content_hash = hash_object.hexdigest()
 

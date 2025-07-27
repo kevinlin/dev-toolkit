@@ -16,7 +16,7 @@ def setup_jinja_env(template_dir):
 # Render the Gherkin feature file
 def render_gherkin(template, data, output_file):
     output = template.render(data)
-    with open(output_file, 'w') as file:
+    with open(output_file, "w") as file:
         file.write(output)
 
 
@@ -35,10 +35,10 @@ def transpile(maestro_yaml_file, template_file, output_file):
 
     # Combine the two documents: app data (1st) and flow data (2nd)
     maestro_data = maestro_docs[0]  # The appId part
-    maestro_data['flow'] = maestro_docs[1]  # The list of steps
+    maestro_data["flow"] = maestro_docs[1]  # The list of steps
 
     # Set up Jinja2 environment
-    env = setup_jinja_env('.')
+    env = setup_jinja_env(".")
 
     # Load Jinja2 template
     template = env.get_template(template_file)

@@ -24,8 +24,8 @@ class TestContentProcessor(unittest.TestCase):
 
     def test_init_with_html_processing_available(self):
         """Test ContentProcessor initialization when HTML processing libraries are available"""
-        with patch('content_processor.HTML_PROCESSING_AVAILABLE', True):
-            with patch('content_processor.html2text.HTML2Text') as mock_html2text:
+        with patch("content_processor.HTML_PROCESSING_AVAILABLE", True):
+            with patch("content_processor.html2text.HTML2Text") as mock_html2text:
                 mock_converter = MagicMock()
                 mock_html2text.return_value = mock_converter
 
@@ -44,7 +44,7 @@ class TestContentProcessor(unittest.TestCase):
 
     def test_init_without_html_processing_available(self):
         """Test ContentProcessor initialization when HTML processing libraries are not available"""
-        with patch('content_processor.HTML_PROCESSING_AVAILABLE', False):
+        with patch("content_processor.HTML_PROCESSING_AVAILABLE", False):
             processor = ContentProcessor()
             self.assertIsNone(processor.html_converter)
 
@@ -61,9 +61,9 @@ class TestContentProcessor(unittest.TestCase):
         </html>
         """
 
-        with patch('content_processor.HTML_PROCESSING_AVAILABLE', True):
-            with patch('content_processor.BeautifulSoup') as mock_soup_class:
-                with patch.object(self.processor, 'html_converter') as mock_converter:
+        with patch("content_processor.HTML_PROCESSING_AVAILABLE", True):
+            with patch("content_processor.BeautifulSoup") as mock_soup_class:
+                with patch.object(self.processor, "html_converter") as mock_converter:
                     # Mock BeautifulSoup
                     mock_soup = MagicMock()
                     mock_soup_class.return_value = mock_soup
@@ -75,7 +75,7 @@ class TestContentProcessor(unittest.TestCase):
                     result = self.processor.convert_html_to_text(html_content)
 
                     # Verify BeautifulSoup was used
-                    mock_soup_class.assert_called_once_with(html_content, 'html.parser')
+                    mock_soup_class.assert_called_once_with(html_content, "html.parser")
                     mock_soup.assert_called_once_with(["script", "style"])
 
                     # Verify html2text was used
@@ -87,7 +87,7 @@ class TestContentProcessor(unittest.TestCase):
         """Test HTML to text conversion when libraries are not available"""
         html_content = "<p>This is <strong>test</strong> content.</p>"
 
-        with patch('content_processor.HTML_PROCESSING_AVAILABLE', False):
+        with patch("content_processor.HTML_PROCESSING_AVAILABLE", False):
             result = self.processor.convert_html_to_text(html_content)
 
             # Should use regex fallback
@@ -103,9 +103,9 @@ class TestContentProcessor(unittest.TestCase):
         """Test HTML to text conversion exception handling"""
         html_content = "<p>Test content</p>"
 
-        with patch('content_processor.HTML_PROCESSING_AVAILABLE', True):
-            with patch('content_processor.BeautifulSoup', side_effect=Exception("Parse error")):
-                with patch('content_processor.re.sub', return_value="fallback result"):
+        with patch("content_processor.HTML_PROCESSING_AVAILABLE", True):
+            with patch("content_processor.BeautifulSoup", side_effect=Exception("Parse error")):
+                with patch("content_processor.re.sub", return_value="fallback result"):
                     result = self.processor.convert_html_to_text(html_content)
                     self.assertEqual(result, "fallback result")
 
@@ -173,7 +173,7 @@ Original message content."""
     def test_strip_quoted_replies_exception_handling(self):
         """Test quoted reply stripping exception handling"""
         # Test with None input to trigger exception path
-        with patch('builtins.print'):  # Suppress warning print
+        with patch("builtins.print"):  # Suppress warning print
             result = self.processor.strip_quoted_replies(None)
             self.assertEqual(result, "")  # Should return empty string for None input
 
@@ -211,8 +211,8 @@ Original message content."""
         """Test whitespace normalization exception handling"""
         content = "Test content"
 
-        with patch('builtins.print'):  # Suppress warning print
-            with patch('content_processor.re.sub', side_effect=Exception("Regex error")):
+        with patch("builtins.print"):  # Suppress warning print
+            with patch("content_processor.re.sub", side_effect=Exception("Regex error")):
                 result = self.processor.normalize_whitespace(content)
                 self.assertEqual(result, "Test content")  # Should return stripped content on error
 
@@ -244,7 +244,7 @@ Original message content."""
     def test_is_valid_content_exception_handling(self):
         """Test content validation exception handling"""
         # Test with None input to trigger exception path
-        with patch('builtins.print'):  # Suppress warning print
+        with patch("builtins.print"):  # Suppress warning print
             result = self.processor.is_valid_content(None)
             self.assertFalse(result)  # Should return False for None input
 
@@ -264,8 +264,8 @@ Original message content."""
         for subject, expected in test_cases:
             with self.subTest(subject=subject):
                 msg = email.message.EmailMessage()
-                msg['Subject'] = subject
-                msg['From'] = 'user@example.com'
+                msg["Subject"] = subject
+                msg["From"] = "user@example.com"
 
                 result = self.processor.is_system_generated(msg)
                 self.assertEqual(result, expected, f"Subject: {subject}")
@@ -286,22 +286,22 @@ Original message content."""
         for sender, expected in test_cases:
             with self.subTest(sender=sender):
                 msg = email.message.EmailMessage()
-                msg['Subject'] = 'Regular Subject'
-                msg['From'] = sender
+                msg["Subject"] = "Regular Subject"
+                msg["From"] = sender
 
                 result = self.processor.is_system_generated(msg)
                 self.assertEqual(result, expected, f"Sender: {sender}")
 
     def test_is_system_generated_headers(self):
         """Test system-generated detection based on headers"""
-        headers = ['X-Autoreply', 'X-Autorespond', 'Auto-Submitted', 'X-Auto-Response-Suppress']
+        headers = ["X-Autoreply", "X-Autorespond", "Auto-Submitted", "X-Auto-Response-Suppress"]
 
         for header in headers:
             with self.subTest(header=header):
                 msg = email.message.EmailMessage()
-                msg['Subject'] = 'Regular Subject'
-                msg['From'] = 'user@example.com'
-                msg[header] = 'yes'
+                msg["Subject"] = "Regular Subject"
+                msg["From"] = "user@example.com"
+                msg[header] = "yes"
 
                 result = self.processor.is_system_generated(msg)
                 self.assertTrue(result, f"Header: {header}")
@@ -309,19 +309,19 @@ Original message content."""
     def test_is_system_generated_exception_handling(self):
         """Test system-generated detection exception handling"""
         msg = email.message.EmailMessage()
-        msg['Subject'] = 'Test Subject'
-        msg['From'] = 'user@example.com'
+        msg["Subject"] = "Test Subject"
+        msg["From"] = "user@example.com"
 
-        with patch('builtins.print'):  # Suppress warning print
-            with patch.object(msg, 'get', side_effect=Exception("Get error")):
+        with patch("builtins.print"):  # Suppress warning print
+            with patch.object(msg, "get", side_effect=Exception("Get error")):
                 result = self.processor.is_system_generated(msg)
                 self.assertFalse(result)  # Should return False on error
 
     def test_extract_body_content_multipart_text_priority(self):
         """Test body extraction prioritizes plain text over HTML in multipart messages"""
         msg = email.message.EmailMessage()
-        msg['Subject'] = 'Test Email'
-        msg['From'] = 'test@example.com'
+        msg["Subject"] = "Test Email"
+        msg["From"] = "test@example.com"
 
         # Add text part
         text_content = "This is the plain text version."
@@ -329,7 +329,7 @@ Original message content."""
 
         # Add HTML part
         html_content = "<p>This is the <strong>HTML</strong> version.</p>"
-        msg.add_alternative(html_content, subtype='html')
+        msg.add_alternative(html_content, subtype="html")
 
         result = self.processor.extract_body_content(msg)
 
@@ -341,14 +341,16 @@ Original message content."""
     def test_extract_body_content_multipart_html_fallback(self):
         """Test body extraction falls back to HTML when no plain text available"""
         msg = email.message.EmailMessage()
-        msg['Subject'] = 'Test Email'
-        msg['From'] = 'test@example.com'
+        msg["Subject"] = "Test Email"
+        msg["From"] = "test@example.com"
 
         # Add only HTML part
         html_content = "<p>This is the <strong>HTML</strong> version.</p>"
-        msg.add_alternative(html_content, subtype='html')
+        msg.add_alternative(html_content, subtype="html")
 
-        with patch.object(self.processor, 'convert_html_to_text', return_value="Converted HTML text"):
+        with patch.object(
+            self.processor, "convert_html_to_text", return_value="Converted HTML text"
+        ):
             result = self.processor.extract_body_content(msg)
 
             self.assertEqual(result, "Converted HTML text")
@@ -356,8 +358,8 @@ Original message content."""
     def test_extract_body_content_single_part_text(self):
         """Test body extraction from single-part text message"""
         msg = email.message.EmailMessage()
-        msg['Subject'] = 'Test Email'
-        msg['From'] = 'test@example.com'
+        msg["Subject"] = "Test Email"
+        msg["From"] = "test@example.com"
         msg.set_content("This is a simple text message.")
 
         result = self.processor.extract_body_content(msg)
@@ -367,16 +369,20 @@ Original message content."""
     def test_extract_body_content_single_part_html(self):
         """Test body extraction from single-part HTML message"""
         msg = email.message.EmailMessage()
-        msg['Subject'] = 'Test Email'
-        msg['From'] = 'test@example.com'
-        msg.set_content("<p>HTML content</p>", subtype='html')
+        msg["Subject"] = "Test Email"
+        msg["From"] = "test@example.com"
+        msg.set_content("<p>HTML content</p>", subtype="html")
 
         # Mock all the filtering steps to preserve the converted content
-        with patch.object(self.processor, 'convert_html_to_text', return_value="Converted HTML"):
-            with patch.object(self.processor, 'strip_quoted_replies', side_effect=lambda x: x):
-                with patch.object(self.processor, 'strip_opening_greetings', side_effect=lambda x: x):
-                    with patch.object(self.processor, 'strip_signatures', side_effect=lambda x: x):
-                        with patch.object(self.processor, 'normalize_whitespace', side_effect=lambda x: x):
+        with patch.object(self.processor, "convert_html_to_text", return_value="Converted HTML"):
+            with patch.object(self.processor, "strip_quoted_replies", side_effect=lambda x: x):
+                with patch.object(
+                    self.processor, "strip_opening_greetings", side_effect=lambda x: x
+                ):
+                    with patch.object(self.processor, "strip_signatures", side_effect=lambda x: x):
+                        with patch.object(
+                            self.processor, "normalize_whitespace", side_effect=lambda x: x
+                        ):
                             result = self.processor.extract_body_content(msg)
 
                             self.assertEqual(result, "Converted HTML")
@@ -384,12 +390,14 @@ Original message content."""
     def test_extract_body_content_with_attachments(self):
         """Test body extraction skips attachments"""
         msg = email.message.EmailMessage()
-        msg['Subject'] = 'Test Email'
-        msg['From'] = 'test@example.com'
+        msg["Subject"] = "Test Email"
+        msg["From"] = "test@example.com"
         msg.set_content("Main message content")
 
         # Add attachment
-        msg.add_attachment(b"attachment data", maintype='application', subtype='pdf', filename='test.pdf')
+        msg.add_attachment(
+            b"attachment data", maintype="application", subtype="pdf", filename="test.pdf"
+        )
 
         result = self.processor.extract_body_content(msg)
 
@@ -415,25 +423,33 @@ This is a test message with UTF-8 encoding."""
     def test_extract_body_content_exception_handling(self):
         """Test body extraction exception handling"""
         msg = email.message.EmailMessage()
-        msg['Subject'] = 'Test Email'
-        msg['From'] = 'test@example.com'
+        msg["Subject"] = "Test Email"
+        msg["From"] = "test@example.com"
 
-        with patch('builtins.print'):  # Suppress error print
-            with patch.object(msg, 'is_multipart', side_effect=Exception("Multipart error")):
+        with patch("builtins.print"):  # Suppress error print
+            with patch.object(msg, "is_multipart", side_effect=Exception("Multipart error")):
                 result = self.processor.extract_body_content(msg)
                 self.assertEqual(result, "")  # Should return empty string on error
 
     def test_extract_body_content_applies_cleaning(self):
         """Test that body extraction applies cleaning and normalization"""
         msg = email.message.EmailMessage()
-        msg['Subject'] = 'Test Email'
-        msg['From'] = 'test@example.com'
+        msg["Subject"] = "Test Email"
+        msg["From"] = "test@example.com"
         msg.set_content("Test content")
 
-        with patch.object(self.processor, 'strip_quoted_replies', return_value="after_quotes") as mock_strip_quotes:
-            with patch.object(self.processor, 'strip_opening_greetings', return_value="after_greetings") as mock_strip_greetings:
-                with patch.object(self.processor, 'strip_signatures', return_value="after_signatures") as mock_strip_signatures:
-                    with patch.object(self.processor, 'normalize_whitespace', return_value="normalized content") as mock_normalize:
+        with patch.object(
+            self.processor, "strip_quoted_replies", return_value="after_quotes"
+        ) as mock_strip_quotes:
+            with patch.object(
+                self.processor, "strip_opening_greetings", return_value="after_greetings"
+            ) as mock_strip_greetings:
+                with patch.object(
+                    self.processor, "strip_signatures", return_value="after_signatures"
+                ) as mock_strip_signatures:
+                    with patch.object(
+                        self.processor, "normalize_whitespace", return_value="normalized content"
+                    ) as mock_normalize:
                         result = self.processor.extract_body_content(msg)
 
                         mock_strip_quotes.assert_called_once()
@@ -458,7 +474,7 @@ This is a test message with UTF-8 encoding."""
         # Should return a valid SHA-256 hash (64 characters)
         self.assertEqual(len(hash_result), 64)
         self.assertIsInstance(hash_result, str)
-        self.assertTrue(all(c in '0123456789abcdef' for c in hash_result))
+        self.assertTrue(all(c in "0123456789abcdef" for c in hash_result))
 
     def test_content_hashing_consistency(self):
         """Test that same content produces same hash"""
@@ -557,5 +573,5 @@ This is a test message with UTF-8 encoding."""
         self.assertTrue(self.processor.is_content_duplicate(content2, existing_hashes))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

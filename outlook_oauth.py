@@ -7,6 +7,7 @@ This replaces the Basic Authentication/IMAP approach which Microsoft has depreca
 """
 
 import http.server
+import re
 import socketserver
 import urllib.parse
 import webbrowser
@@ -20,6 +21,7 @@ import requests
 @dataclass
 class OutlookMessage:
     """Represents an email message from Microsoft Graph API"""
+
     id: str
     subject: str
     body_content: str
@@ -27,6 +29,7 @@ class OutlookMessage:
     received_datetime: str
     is_read: bool
     word_count: int = 0
+
 
 class OutlookOAuth2Client:
     """Handles OAuth2 authentication and Microsoft Graph API access for Outlook"""
@@ -39,10 +42,12 @@ class OutlookOAuth2Client:
     SCOPES = [
         "https://graph.microsoft.com/Mail.Read",
         "https://graph.microsoft.com/Mail.ReadWrite",
-        "https://graph.microsoft.com/User.Read"
+        "https://graph.microsoft.com/User.Read",
     ]
 
-    def __init__(self, client_id: str, client_secret: str = None, redirect_uri: str = "http://localhost:8080"):
+    def __init__(
+        self, client_id: str, client_secret: str = None, redirect_uri: str = "http://localhost:8080"
+    ):
         """
         Initialize OAuth2 client for Outlook
 
@@ -62,22 +67,16 @@ class OutlookOAuth2Client:
         if client_secret:
             # Confidential client (with secret)
             self.app = msal.ConfidentialClientApplication(
-                client_id=client_id,
-                client_credential=client_secret,
-                authority=self.AUTHORITY
+                client_id=client_id, client_credential=client_secret, authority=self.AUTHORITY
             )
         else:
             # Public client (no secret)
-            self.app = msal.PublicClientApplication(
-                client_id=client_id,
-                authority=self.AUTHORITY
-            )
+            self.app = msal.PublicClientApplication(client_id=client_id, authority=self.AUTHORITY)
 
     def get_auth_url(self) -> str:
         """Get the authorization URL for OAuth2 flow"""
         auth_url = self.app.get_authorization_request_url(
-            scopes=self.SCOPES,
-            redirect_uri=self.redirect_uri
+            scopes=self.SCOPES, redirect_uri=self.redirect_uri
         )
         return auth_url
 
@@ -128,7 +127,7 @@ class OutlookOAuth2Client:
             print("   Waiting for authentication...")
 
             # Automatically open browser
-            webbrowser.open(flow['verification_uri'])
+            webbrowser.open(flow["verification_uri"])
 
             # Wait for user to complete authentication
             result = self.app.acquire_token_by_device_flow(flow)
@@ -139,7 +138,9 @@ class OutlookOAuth2Client:
                 print("✅ Authentication successful!")
                 return True
             else:
-                print(f"❌ Authentication failed: {result.get('error_description', 'Unknown error')}")
+                print(
+                    f"❌ Authentication failed: {result.get('error_description', 'Unknown error')}"
+                )
                 return False
 
         except Exception as e:
@@ -162,9 +163,7 @@ class OutlookOAuth2Client:
 
             # Exchange code for token
             result = self.app.acquire_token_by_authorization_code(
-                auth_code,
-                scopes=self.SCOPES,
-                redirect_uri=self.redirect_uri
+                auth_code, scopes=self.SCOPES, redirect_uri=self.redirect_uri
             )
 
             if "access_token" in result:
@@ -173,7 +172,9 @@ class OutlookOAuth2Client:
                 print("✅ Authentication successful!")
                 return True
             else:
-                print(f"❌ Token exchange failed: {result.get('error_description', 'Unknown error')}")
+                print(
+                    f"❌ Token exchange failed: {result.get('error_description', 'Unknown error')}"
+                )
                 return False
 
         except Exception as e:
@@ -190,23 +191,25 @@ class OutlookOAuth2Client:
                 parsed_url = urllib.parse.urlparse(self.path)
                 query_params = urllib.parse.parse_qs(parsed_url.query)
 
-                if 'code' in query_params:
-                    auth_code = query_params['code'][0]
+                if "code" in query_params:
+                    auth_code = query_params["code"][0]
                     self.send_response(200)
-                    self.send_header('Content-type', 'text/html')
+                    self.send_header("Content-type", "text/html")
                     self.end_headers()
-                    self.wfile.write(b'<html><body><h1>Authentication successful!</h1><p>You can close this window.</p></body></html>')
+                    self.wfile.write(
+                        b"<html><body><h1>Authentication successful!</h1><p>You can close this window.</p></body></html>"
+                    )
                 else:
                     self.send_response(400)
-                    self.send_header('Content-type', 'text/html')
+                    self.send_header("Content-type", "text/html")
                     self.end_headers()
-                    self.wfile.write(b'<html><body><h1>Authentication failed!</h1></body></html>')
+                    self.wfile.write(b"<html><body><h1>Authentication failed!</h1></body></html>")
 
             def log_message(self, format, *args):
                 pass  # Suppress server logs
 
         try:
-            port = int(self.redirect_uri.split(':')[-1])
+            port = int(self.redirect_uri.split(":")[-1])
             with socketserver.TCPServer(("", port), CallbackHandler) as httpd:
                 print(f"📡 Waiting for callback on {self.redirect_uri}")
                 httpd.timeout = 60  # 60 second timeout
@@ -222,24 +225,25 @@ class OutlookOAuth2Client:
             return False
 
         try:
-            result = self.app.acquire_token_by_refresh_token(
-                self.refresh_token,
-                scopes=self.SCOPES
-            )
+            result = self.app.acquire_token_by_refresh_token(self.refresh_token, scopes=self.SCOPES)
 
             if "access_token" in result:
                 self.access_token = result["access_token"]
                 self.refresh_token = result.get("refresh_token", self.refresh_token)
                 return True
             else:
-                print(f"❌ Token refresh failed: {result.get('error_description', 'Unknown error')}")
+                print(
+                    f"❌ Token refresh failed: {result.get('error_description', 'Unknown error')}"
+                )
                 return False
 
         except Exception as e:
             print(f"❌ Token refresh error: {e}")
             return False
 
-    def _make_graph_request(self, endpoint: str, method: str = "GET", data: Dict = None) -> Optional[Dict]:
+    def _make_graph_request(
+        self, endpoint: str, method: str = "GET", data: Dict = None
+    ) -> Optional[Dict]:
         """Make authenticated request to Microsoft Graph API"""
         if not self.access_token:
             print("❌ No access token available")
@@ -247,7 +251,7 @@ class OutlookOAuth2Client:
 
         headers = {
             "Authorization": f"Bearer {self.access_token}",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
         }
 
         url = f"{self.GRAPH_ENDPOINT}{endpoint}"
@@ -313,6 +317,7 @@ class OutlookOAuth2Client:
                         if msg_data["body"].get("contentType") == "html":
                             try:
                                 import html2text
+
                                 h = html2text.HTML2Text()
                                 h.ignore_links = True
                                 h.ignore_images = True
@@ -321,26 +326,35 @@ class OutlookOAuth2Client:
                                 h.unicode_snob = True  # Better Unicode handling
                                 h.bypass_tables = False
                                 h.ignore_tables = False
-                                h.single_line_break = False  # Allow double line breaks for paragraphs
+                                h.single_line_break = (
+                                    False  # Allow double line breaks for paragraphs
+                                )
                                 body_content = h.handle(body_content)
 
                                 # Clean up excessive line breaks that html2text might add
-                                body_content = re.sub(r'\n\s*\n\s*\n+', '\n\n', body_content)
+                                body_content = re.sub(r"\n\s*\n\s*\n+", "\n\n", body_content)
                                 # Remove leading/trailing whitespace
                                 body_content = body_content.strip()
 
                             except ImportError:
                                 # Fallback to basic HTML stripping with line break preservation
-                                import re
                                 # Convert common HTML elements to line breaks first
-                                body_content = re.sub(r'<br\s*/?>', '\n', body_content, flags=re.IGNORECASE)
-                                body_content = re.sub(r'</p>', '\n\n', body_content, flags=re.IGNORECASE)
-                                body_content = re.sub(r'</div>', '\n', body_content, flags=re.IGNORECASE)
-                                body_content = re.sub(r'</h[1-6]>', '\n\n', body_content, flags=re.IGNORECASE)
+                                body_content = re.sub(
+                                    r"<br\s*/?>", "\n", body_content, flags=re.IGNORECASE
+                                )
+                                body_content = re.sub(
+                                    r"</p>", "\n\n", body_content, flags=re.IGNORECASE
+                                )
+                                body_content = re.sub(
+                                    r"</div>", "\n", body_content, flags=re.IGNORECASE
+                                )
+                                body_content = re.sub(
+                                    r"</h[1-6]>", "\n\n", body_content, flags=re.IGNORECASE
+                                )
                                 # Remove all remaining HTML tags
-                                body_content = re.sub(r'<[^>]+>', '', body_content)
+                                body_content = re.sub(r"<[^>]+>", "", body_content)
                                 # Clean up excessive whitespace
-                                body_content = re.sub(r'\n\s*\n\s*\n+', '\n\n', body_content)
+                                body_content = re.sub(r"\n\s*\n\s*\n+", "\n\n", body_content)
 
                     sender_email = ""
                     if "sender" in msg_data and msg_data["sender"]:
@@ -354,7 +368,7 @@ class OutlookOAuth2Client:
                         sender_email=sender_email,
                         received_datetime=msg_data.get("receivedDateTime", ""),
                         is_read=msg_data.get("isRead", False),
-                        word_count=len(body_content.split()) if body_content else 0
+                        word_count=len(body_content.split()) if body_content else 0,
                     )
 
                     messages.append(message)
@@ -364,7 +378,11 @@ class OutlookOAuth2Client:
                     continue
 
             # Check for pagination
-            endpoint = result.get("@odata.nextLink", "").replace(self.GRAPH_ENDPOINT, "") if "@odata.nextLink" in result else None
+            endpoint = (
+                result.get("@odata.nextLink", "").replace(self.GRAPH_ENDPOINT, "")
+                if "@odata.nextLink" in result
+                else None
+            )
 
         return messages[:limit]
 
@@ -401,7 +419,4 @@ def create_outlook_oauth_client(email_address: str) -> OutlookOAuth2Client:
     print(f"📧 Creating OAuth2 client for: {email_address}")
     print("🔑 Using default client ID (register your own for production)")
 
-    return OutlookOAuth2Client(
-        client_id=DEFAULT_CLIENT_ID,
-        redirect_uri="http://localhost:8080"
-    )
+    return OutlookOAuth2Client(client_id=DEFAULT_CLIENT_ID, redirect_uri="http://localhost:8080")

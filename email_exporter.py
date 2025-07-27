@@ -9,6 +9,7 @@ Processes only sent messages, extracts clean body content while excluding
 quoted replies and duplicates, and outputs content to timestamped plain text files.
 """
 
+import contextlib
 import datetime
 import email
 import email.message
@@ -23,11 +24,14 @@ from typing import Iterator, List, Optional, Set
 # Try to import dotenv, but continue without it if not available
 try:
     from dotenv import load_dotenv
+
     DOTENV_AVAILABLE = True
 except ImportError:
     DOTENV_AVAILABLE = False
+
     def load_dotenv():
         pass
+
 
 # Import local modules
 from content_processor import ContentProcessor
@@ -35,11 +39,14 @@ from content_processor import ContentProcessor
 # Import OAuth2 module for Outlook
 try:
     from outlook_oauth import OutlookMessage, create_outlook_oauth_client
+
     OUTLOOK_OAUTH_AVAILABLE = True
 except ImportError:
     OUTLOOK_OAUTH_AVAILABLE = False
+
     def create_outlook_oauth_client(*args, **kwargs):
         raise ImportError("OAuth2 dependencies not available. Run: uv pip install msal requests")
+
 
 import re
 
@@ -47,6 +54,7 @@ import re
 @dataclass
 class ProviderConfig:
     """Configuration for email provider IMAP settings"""
+
     imap_server: str
     port: int
     sent_folder: str
@@ -55,6 +63,7 @@ class ProviderConfig:
 @dataclass
 class ProcessingStats:
     """Statistics for email processing with enhanced error tracking and timing"""
+
     total_fetched: int = 0
     skipped_short: int = 0
     skipped_duplicate: int = 0
@@ -101,15 +110,15 @@ class ProcessingStats:
         """Increment specific error type and total errors"""
         self.errors += 1
 
-        if error_type == 'fetch':
+        if error_type == "fetch":
             self.fetch_errors += 1
-        elif error_type == 'timeout':
+        elif error_type == "timeout":
             self.timeout_errors += 1
-        elif error_type == 'processing':
+        elif error_type == "processing":
             self.processing_errors += 1
-        elif error_type == 'cache':
+        elif error_type == "cache":
             self.cache_errors += 1
-        elif error_type == 'output':
+        elif error_type == "output":
             self.output_errors += 1
 
     def get_summary(self) -> str:
@@ -117,13 +126,15 @@ class ProcessingStats:
         duration_str = self.get_processing_duration()
         duration_line = f"\n  Processing time: {duration_str}" if duration_str else ""
 
-        summary = (f"Processing Summary:\n"
-                  f"  Total fetched: {self.total_fetched}\n"
-                  f"  Skipped (short): {self.skipped_short}\n"
-                  f"  Skipped (duplicate): {self.skipped_duplicate}\n"
-                  f"  Skipped (system): {self.skipped_system}\n"
-                  f"  Retained: {self.retained}\n"
-                  f"  Total errors: {self.errors}{duration_line}")
+        summary = (
+            f"Processing Summary:\n"
+            f"  Total fetched: {self.total_fetched}\n"
+            f"  Skipped (short): {self.skipped_short}\n"
+            f"  Skipped (duplicate): {self.skipped_duplicate}\n"
+            f"  Skipped (system): {self.skipped_system}\n"
+            f"  Retained: {self.retained}\n"
+            f"  Total errors: {self.errors}{duration_line}"
+        )
 
         # Add detailed error breakdown if there are errors
         if self.errors > 0:
@@ -161,9 +172,9 @@ class EmailExporterConfig:
 
     # Provider-specific IMAP configurations
     PROVIDER_CONFIGS = {
-        'gmail': ProviderConfig('imap.gmail.com', 993, '[Gmail]/Sent Mail'),
-        'icloud': ProviderConfig('imap.mail.me.com', 993, '"Sent Messages"'),
-        'outlook': ProviderConfig('outlook.office365.com', 993, 'Sent Items')
+        "gmail": ProviderConfig("imap.gmail.com", 993, "[Gmail]/Sent Mail"),
+        "icloud": ProviderConfig("imap.mail.me.com", 993, '"Sent Messages"'),
+        "outlook": ProviderConfig("outlook.office365.com", 993, "Sent Items"),
     }
 
     def __init__(self):
@@ -187,13 +198,13 @@ class EmailExporterConfig:
             print("Warning: python-dotenv not installed. Reading environment variables directly.")
 
         # Required environment variables (basic)
-        required_vars = ['PROVIDER', 'EMAIL_ADDRESS']
+        required_vars = ["PROVIDER", "EMAIL_ADDRESS"]
         missing_vars = []
 
         # Check for missing environment variables
         for var in required_vars:
             value = os.getenv(var)
-            if not value or value.strip() == '':
+            if not value or value.strip() == "":
                 missing_vars.append(var)
 
         if missing_vars:
@@ -204,23 +215,25 @@ class EmailExporterConfig:
             sys.exit(1)
 
         # Set configuration values
-        self.provider = os.getenv('PROVIDER').strip().lower()
-        self.email_address = os.getenv('EMAIL_ADDRESS').strip()
-        self.app_password = os.getenv('APP_PASSWORD', '').strip()
+        self.provider = os.getenv("PROVIDER").strip().lower()
+        self.email_address = os.getenv("EMAIL_ADDRESS").strip()
+        self.app_password = os.getenv("APP_PASSWORD", "").strip()
 
         # Validate provider
         if self.provider not in self.PROVIDER_CONFIGS:
-            print(f"Error: Invalid PROVIDER '{self.provider}'. Supported providers: {', '.join(self.PROVIDER_CONFIGS.keys())}")
+            print(
+                f"Error: Invalid PROVIDER '{self.provider}'. Supported providers: {', '.join(self.PROVIDER_CONFIGS.keys())}"
+            )
             sys.exit(1)
 
         # Check APP_PASSWORD requirement based on provider
-        if self.provider in ['gmail', 'icloud']:
+        if self.provider in ["gmail", "icloud"]:
             # Traditional providers require app password
             if not self.app_password:
                 print(f"Error: APP_PASSWORD is required for {self.provider}")
                 print("Please set APP_PASSWORD in your .env file")
                 sys.exit(1)
-        elif self.provider == 'outlook':
+        elif self.provider == "outlook":
             # Outlook uses OAuth2, app password is optional/ignored
             if self.app_password:
                 print("ℹ️  Note: APP_PASSWORD is ignored for Outlook (using OAuth2 instead)")
@@ -263,7 +276,9 @@ class IMAPConnectionManager:
         """
         for attempt in range(self.max_retries):
             try:
-                print(f"Attempting IMAP connection to {self.config.imap_server}:{self.config.port} (attempt {attempt + 1}/{self.max_retries})")
+                print(
+                    f"Attempting IMAP connection to {self.config.imap_server}:{self.config.port} (attempt {attempt + 1}/{self.max_retries})"
+                )
 
                 # Create SSL IMAP connection with timeout
                 self.connection = imaplib.IMAP4_SSL(self.config.imap_server, self.config.port)
@@ -274,7 +289,9 @@ class IMAPConnectionManager:
                 self.connection.login(self.config.email_address, self.config.app_password)
 
                 self.is_connected = True
-                print(f"Successfully connected to {self.config.provider} account: {self.config.email_address}")
+                print(
+                    f"Successfully connected to {self.config.provider} account: {self.config.email_address}"
+                )
                 return True
 
             except imaplib.IMAP4.error as e:
@@ -295,7 +312,7 @@ class IMAPConnectionManager:
 
             # Exponential backoff: wait 1s, 2s, 4s between attempts
             if attempt < self.max_retries - 1:
-                wait_time = 2 ** attempt
+                wait_time = 2**attempt
                 print(f"Waiting {wait_time} seconds before retry...")
                 time.sleep(wait_time)
 
@@ -316,7 +333,7 @@ class IMAPConnectionManager:
             # List all folders
             status, folders = self.connection.list()
 
-            if status != 'OK':
+            if status != "OK":
                 print(f"Error: Failed to list folders: {folders}")
                 return []
 
@@ -325,7 +342,7 @@ class IMAPConnectionManager:
             for folder in folders:
                 # Parse folder name from IMAP response
                 # Format is typically: b'(\\HasNoChildren) "/" "INBOX"'
-                folder_str = folder.decode('utf-8') if isinstance(folder, bytes) else str(folder)
+                folder_str = folder.decode("utf-8") if isinstance(folder, bytes) else str(folder)
 
                 # Extract folder name (last quoted part)
                 parts = folder_str.split('"')
@@ -357,16 +374,16 @@ class IMAPConnectionManager:
                 self.config.sent_folder,  # Original: "Sent Messages"
                 f'"{self.config.sent_folder}"',  # Quoted: "Sent Messages"
                 f"'{self.config.sent_folder}'",  # Single quoted: 'Sent Messages'
-                self.config.sent_folder.replace(' ', '_'),  # Underscore: "Sent_Messages"
-                'INBOX.Sent Messages',  # INBOX prefix
-                'INBOX/Sent Messages',  # INBOX with slash
+                self.config.sent_folder.replace(" ", "_"),  # Underscore: "Sent_Messages"
+                "INBOX.Sent Messages",  # INBOX prefix
+                "INBOX/Sent Messages",  # INBOX with slash
             ]
 
             for folder_attempt in folder_variations:
                 print(f"Trying to select folder: {folder_attempt}")
                 try:
                     status, data = self.connection.select(folder_attempt)
-                    if status == 'OK':
+                    if status == "OK":
                         print(f"Successfully selected folder: {folder_attempt}")
                         # Update config for future use
                         self.config.sent_folder = folder_attempt
@@ -384,14 +401,14 @@ class IMAPConnectionManager:
             available_folders = self.list_folders()
 
             # For iCloud, try common alternative folder names
-            if self.config.provider == 'icloud':
-                alternative_folders = ['Sent', 'Sent Items', 'INBOX.Sent', 'INBOX/Sent']
+            if self.config.provider == "icloud":
+                alternative_folders = ["Sent", "Sent Items", "INBOX.Sent", "INBOX/Sent"]
                 for alt_folder in alternative_folders:
                     if alt_folder in available_folders:
                         print(f"Trying alternative folder: {alt_folder}")
                         try:
                             status, data = self.connection.select(alt_folder)
-                            if status == 'OK':
+                            if status == "OK":
                                 print(f"Successfully selected alternative folder: {alt_folder}")
                                 # Update config for future use
                                 self.config.sent_folder = alt_folder
@@ -403,14 +420,21 @@ class IMAPConnectionManager:
                             continue
 
             # For Outlook, try common alternative folder names
-            if self.config.provider == 'outlook':
-                alternative_folders = ['Sent', 'Sent Messages', 'INBOX.Sent Items', 'INBOX/Sent Items', 'INBOX.Sent', 'INBOX/Sent']
+            if self.config.provider == "outlook":
+                alternative_folders = [
+                    "Sent",
+                    "Sent Messages",
+                    "INBOX.Sent Items",
+                    "INBOX/Sent Items",
+                    "INBOX.Sent",
+                    "INBOX/Sent",
+                ]
                 for alt_folder in alternative_folders:
                     if alt_folder in available_folders:
                         print(f"Trying alternative folder: {alt_folder}")
                         try:
                             status, data = self.connection.select(alt_folder)
-                            if status == 'OK':
+                            if status == "OK":
                                 print(f"Successfully selected alternative folder: {alt_folder}")
                                 # Update config for future use
                                 self.config.sent_folder = alt_folder
@@ -425,7 +449,9 @@ class IMAPConnectionManager:
 
             # Get folder message count
             message_count = int(data[0]) if data and data[0] else 0
-            print(f"Successfully selected sent folder '{self.config.sent_folder}' with {message_count} messages")
+            print(
+                f"Successfully selected sent folder '{self.config.sent_folder}' with {message_count} messages"
+            )
             return True
 
         except Exception as e:
@@ -443,13 +469,10 @@ class IMAPConnectionManager:
             try:
                 # Only close if we have a selected folder (in SELECTED state)
                 # Check current state to avoid "CLOSE illegal in state AUTH" error
-                try:
-                    # Try to close - this will only work if we're in SELECTED state
+                # Try to close - this will only work if we're in SELECTED state
+                # If close fails, we're probably in AUTH state (no folder selected)
+                with contextlib.suppress(imaplib.IMAP4.error):
                     self.connection.close()
-                except imaplib.IMAP4.error:
-                    # If close fails, we're probably in AUTH state (no folder selected)
-                    # This is fine, we can proceed to logout
-                    pass
 
                 # Logout from server
                 self.connection.logout()
@@ -488,9 +511,9 @@ class IMAPConnectionManager:
             try:
                 # Search for all messages in the selected folder using UID search
                 print("Searching for all messages in sent folder...")
-                status, data = self.connection.uid('search', None, 'ALL')
+                status, data = self.connection.uid("search", None, "ALL")
 
-                if status != 'OK':
+                if status != "OK":
                     print(f"Error: Failed to search messages: {data}")
                     return
 
@@ -500,18 +523,20 @@ class IMAPConnectionManager:
                     return
 
                 # Split the UID string into individual UIDs
-                all_uids = data[0].decode('utf-8').split()
+                all_uids = data[0].decode("utf-8").split()
                 total_messages = len(all_uids)
 
                 print(f"Found {total_messages} messages in sent folder")
 
                 # Yield UIDs in batches
                 for i in range(0, total_messages, batch_size):
-                    batch_uids = all_uids[i:i + batch_size]
+                    batch_uids = all_uids[i : i + batch_size]
                     batch_num = (i // batch_size) + 1
                     total_batches = (total_messages + batch_size - 1) // batch_size
 
-                    print(f"Processing batch {batch_num}/{total_batches} ({len(batch_uids)} messages)")
+                    print(
+                        f"Processing batch {batch_num}/{total_batches} ({len(batch_uids)} messages)"
+                    )
                     yield batch_uids
 
                 return  # Success, exit retry loop
@@ -548,9 +573,9 @@ class IMAPConnectionManager:
         for fetch_attempt in range(max_fetch_retries):
             try:
                 # Fetch message by UID
-                status, data = self.connection.uid('fetch', uid, '(RFC822)')
+                status, data = self.connection.uid("fetch", uid, "(RFC822)")
 
-                if status != 'OK':
+                if status != "OK":
                     if fetch_attempt == max_fetch_retries - 1:
                         print(f"Warning: Failed to fetch message UID {uid}: {data}")
                     else:
@@ -611,7 +636,7 @@ class CacheManager:
         self.cache_metadata = {
             "last_updated": None,
             "total_processed": 0,
-            "total_content_hashes": 0  # Add content hash count tracking
+            "total_content_hashes": 0,  # Add content hash count tracking
         }
 
         # Ensure output directory exists
@@ -635,7 +660,7 @@ class CacheManager:
             if os.path.exists(self.cache_file):
                 print(f"Loading cache from {self.cache_file}")
 
-                with open(self.cache_file, encoding='utf-8') as f:
+                with open(self.cache_file, encoding="utf-8") as f:
                     cache_data = json.load(f)
 
                 # Validate cache structure
@@ -643,26 +668,32 @@ class CacheManager:
                     raise ValueError("Cache file has invalid structure")
 
                 # Load processed UIDs
-                processed_uids = cache_data.get('processed_uids', [])
+                processed_uids = cache_data.get("processed_uids", [])
                 if isinstance(processed_uids, list):
                     self.processed_uids = set(processed_uids)
                 else:
                     raise ValueError("processed_uids must be a list")
 
                 # Load content hashes
-                content_hashes = cache_data.get('content_hashes', [])
+                content_hashes = cache_data.get("content_hashes", [])
                 if isinstance(content_hashes, list):
                     self.content_hashes = set(content_hashes)
                 else:
                     raise ValueError("content_hashes must be a list")
 
                 # Load metadata
-                self.cache_metadata['last_updated'] = cache_data.get('last_updated')
-                self.cache_metadata['total_processed'] = cache_data.get('total_processed', len(self.processed_uids))
-                self.cache_metadata['total_content_hashes'] = cache_data.get('total_content_hashes', len(self.content_hashes))
+                self.cache_metadata["last_updated"] = cache_data.get("last_updated")
+                self.cache_metadata["total_processed"] = cache_data.get(
+                    "total_processed", len(self.processed_uids)
+                )
+                self.cache_metadata["total_content_hashes"] = cache_data.get(
+                    "total_content_hashes", len(self.content_hashes)
+                )
 
-                print(f"Loaded cache with {len(self.processed_uids)} processed UIDs and {len(self.content_hashes)} content hashes")
-                if self.cache_metadata['last_updated']:
+                print(
+                    f"Loaded cache with {len(self.processed_uids)} processed UIDs and {len(self.content_hashes)} content hashes"
+                )
+                if self.cache_metadata["last_updated"]:
                     print(f"Cache last updated: {self.cache_metadata['last_updated']}")
 
             else:
@@ -681,7 +712,7 @@ class CacheManager:
         self.cache_metadata = {
             "last_updated": None,
             "total_processed": 0,
-            "total_content_hashes": 0
+            "total_content_hashes": 0,
         }
         print("Initialized new empty cache")
 
@@ -692,29 +723,29 @@ class CacheManager:
         """
         try:
             # Update metadata
-            self.cache_metadata['last_updated'] = datetime.datetime.now().isoformat()
-            self.cache_metadata['total_processed'] = len(self.processed_uids)
-            self.cache_metadata['total_content_hashes'] = len(self.content_hashes)
+            self.cache_metadata["last_updated"] = datetime.datetime.now().isoformat()
+            self.cache_metadata["total_processed"] = len(self.processed_uids)
+            self.cache_metadata["total_content_hashes"] = len(self.content_hashes)
 
             # Prepare cache data
             cache_data = {
-                'processed_uids': sorted(list(self.processed_uids)),  # Sort for consistency
-                'content_hashes': sorted(list(self.content_hashes)), # Sort for consistency
-                'last_updated': self.cache_metadata['last_updated'],
-                'total_processed': self.cache_metadata['total_processed'],
-                'total_content_hashes': self.cache_metadata['total_content_hashes']
+                "processed_uids": sorted(self.processed_uids),  # Sort for consistency
+                "content_hashes": sorted(self.content_hashes),  # Sort for consistency
+                "last_updated": self.cache_metadata["last_updated"],
+                "total_processed": self.cache_metadata["total_processed"],
+                "total_content_hashes": self.cache_metadata["total_content_hashes"],
             }
 
             # Write to file with atomic operation (write to temp file first)
-            temp_file = self.cache_file + '.tmp'
+            temp_file = self.cache_file + ".tmp"
 
-            with open(temp_file, 'w', encoding='utf-8') as f:
+            with open(temp_file, "w", encoding="utf-8") as f:
                 json.dump(cache_data, f, indent=2, ensure_ascii=False)
 
             # Atomic move (rename temp file to actual file)
             if os.path.exists(self.cache_file):
                 # Create backup of existing cache
-                backup_file = self.cache_file + '.bak'
+                backup_file = self.cache_file + ".bak"
                 if os.path.exists(backup_file):
                     os.remove(backup_file)
                 os.rename(self.cache_file, backup_file)
@@ -722,17 +753,17 @@ class CacheManager:
             os.rename(temp_file, self.cache_file)
 
             print(f"Cache saved successfully to {self.cache_file}")
-            print(f"Total cached UIDs: {len(self.processed_uids)}, Total content hashes: {len(self.content_hashes)}")
+            print(
+                f"Total cached UIDs: {len(self.processed_uids)}, Total content hashes: {len(self.content_hashes)}"
+            )
 
         except Exception as e:
             print(f"Error saving cache to {self.cache_file}: {str(e)}")
             # Clean up temp file if it exists
-            temp_file = self.cache_file + '.tmp'
+            temp_file = self.cache_file + ".tmp"
             if os.path.exists(temp_file):
-                try:
+                with contextlib.suppress(Exception):
                     os.remove(temp_file)
-                except Exception:
-                    pass
             raise
 
     def is_processed(self, uid: str) -> bool:
@@ -795,11 +826,11 @@ class CacheManager:
             dict: Cache statistics including size and last updated
         """
         return {
-            'total_cached_uids': len(self.processed_uids),
-            'total_cached_content_hashes': len(self.content_hashes),
-            'last_updated': self.cache_metadata['last_updated'],
-            'cache_file': self.cache_file,
-            'provider': self.provider
+            "total_cached_uids": len(self.processed_uids),
+            "total_cached_content_hashes": len(self.content_hashes),
+            "last_updated": self.cache_metadata["last_updated"],
+            "cache_file": self.cache_file,
+            "provider": self.provider,
         }
 
 
@@ -833,7 +864,7 @@ class OutputWriter:
                 os.makedirs(self.output_dir)
                 print(f"Created output directory: {self.output_dir}")
         except Exception as e:
-            raise Exception(f"Failed to create output directory {self.output_dir}: {str(e)}")
+            raise Exception(f"Failed to create output directory {self.output_dir}: {str(e)}") from e
 
     def _generate_output_filename(self) -> None:
         """Generate timestamped filename in format: provider-yyyyMMdd-HHmmss.txt"""
@@ -845,10 +876,10 @@ class OutputWriter:
     def create_output_file(self) -> None:
         """Create and open the output file for writing"""
         try:
-            self.file_handle = open(self.output_file, 'w', encoding='utf-8')
+            self.file_handle = open(self.output_file, "w", encoding="utf-8")
             print(f"Created output file: {self.output_file}")
         except Exception as e:
-            raise Exception(f"Failed to create output file {self.output_file}: {str(e)}")
+            raise Exception(f"Failed to create output file {self.output_file}: {str(e)}") from e
 
     def write_content(self, content: str, email_number: Optional[int] = None) -> None:
         """
@@ -875,17 +906,17 @@ class OutputWriter:
             self.file_handle.write(content)
 
             # Ensure content ends with newlines for proper separation
-            if not content.endswith('\n'):
-                self.file_handle.write('\n')
+            if not content.endswith("\n"):
+                self.file_handle.write("\n")
 
             # Add blank line for readability
-            self.file_handle.write('\n')
+            self.file_handle.write("\n")
 
             # Flush to ensure content is written
             self.file_handle.flush()
 
         except Exception as e:
-            raise Exception(f"Failed to write content to output file: {str(e)}")
+            raise Exception(f"Failed to write content to output file: {str(e)}") from e
 
     def finalize_output(self) -> None:
         """Close the output file and finalize writing"""
@@ -910,7 +941,12 @@ class OutputWriter:
 class OutlookOAuth2Processor:
     """Handles Outlook email processing using OAuth2 and Microsoft Graph API"""
 
-    def __init__(self, outlook_client, cache_manager: Optional[CacheManager] = None, output_writer: Optional[OutputWriter] = None):
+    def __init__(
+        self,
+        outlook_client,
+        cache_manager: Optional[CacheManager] = None,
+        output_writer: Optional[OutputWriter] = None,
+    ):
         self.outlook_client = outlook_client
         self.stats = ProcessingStats()
         self.processed_messages = []  # Store processed messages for preview/summary
@@ -918,7 +954,9 @@ class OutlookOAuth2Processor:
         self.cache_manager = cache_manager  # Cache manager for duplicate prevention
         self.output_writer = output_writer  # Output writer for file management
 
-    def process_emails(self, batch_size: int = 500, progress_interval: int = 100) -> ProcessingStats:
+    def process_emails(
+        self, batch_size: int = 500, progress_interval: int = 100
+    ) -> ProcessingStats:
         """
         Process Outlook emails using Microsoft Graph API
 
@@ -937,10 +975,12 @@ class OutlookOAuth2Processor:
             try:
                 self.cache_manager.load_cache()
                 cache_stats = self.cache_manager.get_cache_stats()
-                print(f"Cache loaded: {cache_stats['total_cached_uids']} previously processed UIDs, {cache_stats['total_cached_content_hashes']} content hashes")
+                print(
+                    f"Cache loaded: {cache_stats['total_cached_uids']} previously processed UIDs, {cache_stats['total_cached_content_hashes']} content hashes"
+                )
             except Exception as e:
                 print(f"Warning: Failed to load cache: {str(e)}")
-                self.stats.increment_error_type('cache')
+                self.stats.increment_error_type("cache")
 
         # Create output file if output writer is available
         if self.output_writer:
@@ -948,7 +988,7 @@ class OutlookOAuth2Processor:
                 self.output_writer.create_output_file()
             except Exception as e:
                 print(f"Error: Failed to create output file: {str(e)}")
-                self.stats.increment_error_type('output')
+                self.stats.increment_error_type("output")
                 self.stats.end_processing()
                 return self.stats
 
@@ -965,7 +1005,7 @@ class OutlookOAuth2Processor:
             print(f"Found {len(messages)} messages in sent folder")
 
             # Process messages
-            for i, message in enumerate(messages, 1):
+            for _i, message in enumerate(messages, 1):
                 try:
                     # Check if message is already processed using cache
                     if self.cache_manager and self.cache_manager.is_processed(message.id):
@@ -988,17 +1028,19 @@ class OutlookOAuth2Processor:
 
                 except Exception as e:
                     print(f"Warning: Error processing message {message.id}: {str(e)}")
-                    self.stats.increment_error_type('processing')
+                    self.stats.increment_error_type("processing")
                     continue
 
             # Finalize output file if output writer is available
             if self.output_writer:
                 try:
                     self.output_writer.finalize_output()
-                    print(f"Output file successfully written: {self.output_writer.get_output_filename()}")
+                    print(
+                        f"Output file successfully written: {self.output_writer.get_output_filename()}"
+                    )
                 except Exception as e:
                     print(f"Warning: Failed to finalize output file: {str(e)}")
-                    self.stats.increment_error_type('output')
+                    self.stats.increment_error_type("output")
 
             # Save cache after processing if cache manager is available
             if self.cache_manager:
@@ -1007,7 +1049,7 @@ class OutlookOAuth2Processor:
                     print("Cache updated and saved successfully")
                 except Exception as e:
                     print(f"Warning: Failed to save cache: {str(e)}")
-                    self.stats.increment_error_type('cache')
+                    self.stats.increment_error_type("cache")
 
             # Mark end of processing and show final summary
             self.stats.end_processing()
@@ -1021,7 +1063,7 @@ class OutlookOAuth2Processor:
 
         except Exception as e:
             print(f"Error: Critical failure during Outlook email processing: {str(e)}")
-            self.stats.increment_error_type('processing')
+            self.stats.increment_error_type("processing")
             self.stats.end_processing()
             return self.stats
 
@@ -1066,13 +1108,15 @@ class OutlookOAuth2Processor:
 
             # Store processed message with cleaned content for preview
             self.stats.retained += 1
-            self.processed_messages.append({
-                'uid': message.id,
-                'subject': message.subject,
-                'date': message.received_datetime,
-                'content': body_content,
-                'word_count': len(body_content.split())
-            })
+            self.processed_messages.append(
+                {
+                    "uid": message.id,
+                    "subject": message.subject,
+                    "date": message.received_datetime,
+                    "content": body_content,
+                    "word_count": len(body_content.split()),
+                }
+            )
 
             # Write content to output file if output writer is available
             if self.output_writer:
@@ -1080,7 +1124,7 @@ class OutlookOAuth2Processor:
                     self.output_writer.write_content(body_content)
                 except Exception as e:
                     print(f"Warning: Failed to write email content to output file: {str(e)}")
-                    self.stats.increment_error_type('output')
+                    self.stats.increment_error_type("output")
                     # Don't fail processing for output errors, just log and continue
 
             # Add content hash to cache for future duplicate detection
@@ -1091,13 +1135,13 @@ class OutlookOAuth2Processor:
                         self.cache_manager.add_content_hash(content_hash)
                 except Exception as e:
                     print(f"Warning: Failed to cache content hash: {str(e)}")
-                    self.stats.increment_error_type('cache')
+                    self.stats.increment_error_type("cache")
 
             return True  # Message was retained
 
         except Exception as e:
             print(f"Error: Failed to process Outlook message {message.id}: {str(e)}")
-            self.stats.increment_error_type('processing')
+            self.stats.increment_error_type("processing")
             return False  # Message was not retained due to error
 
     def _normalize_outlook_content(self, content: str) -> str:
@@ -1116,13 +1160,13 @@ class OutlookOAuth2Processor:
 
         try:
             # Replace different types of line breaks with standard \n
-            content = re.sub(r'\r\n|\r', '\n', content)
+            content = re.sub(r"\r\n|\r", "\n", content)
 
             # Remove excessive whitespace within lines
-            content = re.sub(r'[ \t]+', ' ', content)
+            content = re.sub(r"[ \t]+", " ", content)
 
             # Remove leading/trailing whitespace from each line
-            lines = content.split('\n')
+            lines = content.split("\n")
             cleaned_lines = [line.strip() for line in lines]
 
             # Remove excessive blank lines (more than 2 consecutive) but preserve paragraph structure
@@ -1144,7 +1188,7 @@ class OutlookOAuth2Processor:
                 result_lines.pop()
 
             # Join lines back together
-            content = '\n'.join(result_lines)
+            content = "\n".join(result_lines)
 
             return content
 
@@ -1171,12 +1215,12 @@ class OutlookOAuth2Processor:
             print("  Content preview (first 200 characters):")
 
             # Show first 200 characters of content with proper line breaks
-            content_preview = message['content'][:200]
-            if len(message['content']) > 200:
+            content_preview = message["content"][:200]
+            if len(message["content"]) > 200:
                 content_preview += "..."
 
             # Format preview with proper indentation
-            lines = content_preview.split('\n')
+            lines = content_preview.split("\n")
             for line in lines:
                 print(f"    {line}")
 
@@ -1187,7 +1231,12 @@ class OutlookOAuth2Processor:
 class EmailProcessor:
     """Handles email fetching, processing, and statistics tracking"""
 
-    def __init__(self, imap_manager: IMAPConnectionManager, cache_manager: Optional[CacheManager] = None, output_writer: Optional[OutputWriter] = None):
+    def __init__(
+        self,
+        imap_manager: IMAPConnectionManager,
+        cache_manager: Optional[CacheManager] = None,
+        output_writer: Optional[OutputWriter] = None,
+    ):
         self.imap_manager = imap_manager
         self.stats = ProcessingStats()
         self.processed_messages = []  # Store processed messages for preview/summary
@@ -1195,7 +1244,9 @@ class EmailProcessor:
         self.cache_manager = cache_manager  # Cache manager for duplicate prevention
         self.output_writer = output_writer  # Output writer for file management
 
-    def process_emails(self, batch_size: int = 500, progress_interval: int = 100) -> ProcessingStats:
+    def process_emails(
+        self, batch_size: int = 500, progress_interval: int = 100
+    ) -> ProcessingStats:
         """
         Process all emails in the sent folder with pagination and progress logging.
 
@@ -1214,10 +1265,12 @@ class EmailProcessor:
             try:
                 self.cache_manager.load_cache()
                 cache_stats = self.cache_manager.get_cache_stats()
-                print(f"Cache loaded: {cache_stats['total_cached_uids']} previously processed UIDs, {cache_stats['total_cached_content_hashes']} content hashes")
+                print(
+                    f"Cache loaded: {cache_stats['total_cached_uids']} previously processed UIDs, {cache_stats['total_cached_content_hashes']} content hashes"
+                )
             except Exception as e:
                 print(f"Warning: Failed to load cache: {str(e)}")
-                self.stats.increment_error_type('cache')
+                self.stats.increment_error_type("cache")
 
         # Create output file if output writer is available
         if self.output_writer:
@@ -1225,7 +1278,7 @@ class EmailProcessor:
                 self.output_writer.create_output_file()
             except Exception as e:
                 print(f"Error: Failed to create output file: {str(e)}")
-                self.stats.increment_error_type('output')
+                self.stats.increment_error_type("output")
                 self.stats.end_processing()
                 return self.stats
 
@@ -1241,7 +1294,7 @@ class EmailProcessor:
                     print(f"Completed batch {batch_count} - {self.stats.get_quick_stats()}")
                 except Exception as e:
                     print(f"Error: Failed to process batch {batch_count}: {str(e)}")
-                    self.stats.increment_error_type('processing')
+                    self.stats.increment_error_type("processing")
                     # Continue with next batch instead of failing completely
                     continue
 
@@ -1249,10 +1302,12 @@ class EmailProcessor:
             if self.output_writer:
                 try:
                     self.output_writer.finalize_output()
-                    print(f"Output file successfully written: {self.output_writer.get_output_filename()}")
+                    print(
+                        f"Output file successfully written: {self.output_writer.get_output_filename()}"
+                    )
                 except Exception as e:
                     print(f"Warning: Failed to finalize output file: {str(e)}")
-                    self.stats.increment_error_type('output')
+                    self.stats.increment_error_type("output")
 
             # Save cache after processing if cache manager is available
             if self.cache_manager:
@@ -1261,7 +1316,7 @@ class EmailProcessor:
                     print("Cache updated and saved successfully")
                 except Exception as e:
                     print(f"Warning: Failed to save cache: {str(e)}")
-                    self.stats.increment_error_type('cache')
+                    self.stats.increment_error_type("cache")
 
             # Mark end of processing and show final summary
             self.stats.end_processing()
@@ -1275,7 +1330,7 @@ class EmailProcessor:
 
         except Exception as e:
             print(f"Error: Critical failure during email processing: {str(e)}")
-            self.stats.increment_error_type('processing')
+            self.stats.increment_error_type("processing")
             self.stats.end_processing()
 
             # Finalize output file even if there was an error
@@ -1284,8 +1339,10 @@ class EmailProcessor:
                     self.output_writer.finalize_output()
                     print("Output file finalized despite processing error")
                 except Exception as output_error:
-                    print(f"Warning: Failed to finalize output file after error: {str(output_error)}")
-                    self.stats.increment_error_type('output')
+                    print(
+                        f"Warning: Failed to finalize output file after error: {str(output_error)}"
+                    )
+                    self.stats.increment_error_type("output")
 
             # Try to save cache even if there was an error
             if self.cache_manager:
@@ -1294,7 +1351,7 @@ class EmailProcessor:
                     print("Cache saved despite processing error")
                 except Exception as cache_error:
                     print(f"Warning: Failed to save cache after error: {str(cache_error)}")
-                    self.stats.increment_error_type('cache')
+                    self.stats.increment_error_type("cache")
 
             return self.stats
 
@@ -1320,15 +1377,15 @@ class EmailProcessor:
                     message = self.imap_manager.fetch_message(uid)
                 except (TimeoutError, OSError) as e:
                     print(f"Warning: Timeout/connection error for UID {uid}: {str(e)}")
-                    self.stats.increment_error_type('timeout')
+                    self.stats.increment_error_type("timeout")
                     continue
                 except Exception as e:
                     print(f"Warning: Fetch error for UID {uid}: {str(e)}")
-                    self.stats.increment_error_type('fetch')
+                    self.stats.increment_error_type("fetch")
                     continue
 
                 if message is None:
-                    self.stats.increment_error_type('fetch')
+                    self.stats.increment_error_type("fetch")
                     continue
 
                 # Process the message and check if it was retained
@@ -1340,7 +1397,7 @@ class EmailProcessor:
                         self.cache_manager.mark_processed(uid)
                 except Exception as e:
                     print(f"Warning: Processing error for UID {uid}: {str(e)}")
-                    self.stats.increment_error_type('processing')
+                    self.stats.increment_error_type("processing")
                     continue
 
                 # Update total count
@@ -1349,12 +1406,18 @@ class EmailProcessor:
                 # Enhanced progress logging at specified intervals
                 if self.stats.total_fetched % progress_interval == 0:
                     batch_duration = datetime.datetime.now() - batch_start_time
-                    rate = progress_interval / batch_duration.total_seconds() if batch_duration.total_seconds() > 0 else 0
-                    print(f"Progress: {self.stats.get_quick_stats()} (processing rate: {rate:.1f} emails/sec)")
+                    rate = (
+                        progress_interval / batch_duration.total_seconds()
+                        if batch_duration.total_seconds() > 0
+                        else 0
+                    )
+                    print(
+                        f"Progress: {self.stats.get_quick_stats()} (processing rate: {rate:.1f} emails/sec)"
+                    )
 
             except Exception as e:
                 print(f"Error: Unexpected error processing message UID {uid}: {str(e)}")
-                self.stats.increment_error_type('processing')
+                self.stats.increment_error_type("processing")
                 continue
 
     def _process_single_message(self, uid: str, message: email.message.Message) -> bool:
@@ -1392,18 +1455,20 @@ class EmailProcessor:
                     return False
 
             # Get basic message info
-            subject = message.get('Subject', 'No Subject')
-            date = message.get('Date', 'No Date')
+            subject = message.get("Subject", "No Subject")
+            date = message.get("Date", "No Date")
 
             # Store processed message with cleaned content for preview
             self.stats.retained += 1
-            self.processed_messages.append({
-                'uid': uid,
-                'subject': subject,
-                'date': date,
-                'content': body_content,
-                'word_count': len(body_content.split())
-            })
+            self.processed_messages.append(
+                {
+                    "uid": uid,
+                    "subject": subject,
+                    "date": date,
+                    "content": body_content,
+                    "word_count": len(body_content.split()),
+                }
+            )
 
             # Write content to output file if output writer is available
             if self.output_writer:
@@ -1411,7 +1476,7 @@ class EmailProcessor:
                     self.output_writer.write_content(body_content)
                 except Exception as e:
                     print(f"Warning: Failed to write email content to output file: {str(e)}")
-                    self.stats.increment_error_type('output')
+                    self.stats.increment_error_type("output")
                     # Don't fail processing for output errors, just log and continue
 
             # Add content hash to cache for future duplicate detection
@@ -1422,13 +1487,13 @@ class EmailProcessor:
                         self.cache_manager.add_content_hash(content_hash)
                 except Exception as e:
                     print(f"Warning: Failed to cache content hash: {str(e)}")
-                    self.stats.increment_error_type('cache')
+                    self.stats.increment_error_type("cache")
 
             return True  # Message was retained
 
         except Exception as e:
             print(f"Error: Failed to process message content for UID {uid}: {str(e)}")
-            self.stats.increment_error_type('processing')
+            self.stats.increment_error_type("processing")
             return False  # Message was not retained due to error
 
     def _show_message_preview(self) -> None:
@@ -1450,19 +1515,17 @@ class EmailProcessor:
             print("  Content preview (first 200 characters):")
 
             # Show first 200 characters of content with proper line breaks
-            content_preview = message['content'][:200]
-            if len(message['content']) > 200:
+            content_preview = message["content"][:200]
+            if len(message["content"]) > 200:
                 content_preview += "..."
 
             # Format preview with proper indentation
-            lines = content_preview.split('\n')
+            lines = content_preview.split("\n")
             for line in lines:
                 print(f"    {line}")
 
             if i < preview_count:
                 print("-" * 60)
-
-
 
 
 def main():
@@ -1489,7 +1552,7 @@ def main():
         print(f"Ready to connect to {config.provider} account: {config.email_address}")
 
         # Check if this is Outlook and handle OAuth2 vs IMAP
-        if config.provider == 'outlook':
+        if config.provider == "outlook":
             print("🔐 Outlook detected - Using OAuth2 authentication (Microsoft Graph API)")
             print("⚠️  Note: App passwords are deprecated for Outlook.com accounts")
 
@@ -1510,7 +1573,9 @@ def main():
                 print("🔑 Starting OAuth2 authentication...")
                 if not outlook_client.acquire_token_interactive():
                     print("❌ OAuth2 authentication failed")
-                    print("Please ensure you have a valid Microsoft account and internet connection")
+                    print(
+                        "Please ensure you have a valid Microsoft account and internet connection"
+                    )
                     sys.exit(1)
 
                 # Test connection
@@ -1610,7 +1675,7 @@ def main():
         print("Email processing completed successfully!")
         print(f"Total script execution time: {duration_str}")
 
-        if config.provider == 'outlook':
+        if config.provider == "outlook":
             print("✅ Used OAuth2 authentication for Outlook")
         else:
             print(f"✅ Used IMAP authentication for {config.provider}")

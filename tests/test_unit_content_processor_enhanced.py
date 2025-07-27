@@ -9,8 +9,8 @@ import sys
 import unittest
 
 # Add src directory to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from content_processor import ContentProcessor
 
@@ -239,5 +239,5 @@ More content here."""
         self.assertEqual(result, content)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

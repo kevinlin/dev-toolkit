@@ -25,13 +25,13 @@ class TestOutputWriter(unittest.TestCase):
     def setUp(self):
         """Set up test environment with temporary directory"""
         self.test_dir = tempfile.mkdtemp()
-        self.provider = 'gmail'
+        self.provider = "gmail"
         self.output_writer = OutputWriter(self.provider, self.test_dir)
 
     def tearDown(self):
         """Clean up test environment"""
         # Close any open file handles
-        if hasattr(self.output_writer, 'file_handle') and self.output_writer.file_handle:
+        if hasattr(self.output_writer, "file_handle") and self.output_writer.file_handle:
             self.output_writer.file_handle.close()
 
         # Clean up test directory
@@ -40,7 +40,7 @@ class TestOutputWriter(unittest.TestCase):
 
     def test_output_writer_initialization(self):
         """Test OutputWriter initialization"""
-        self.assertEqual(self.output_writer.provider, 'gmail')
+        self.assertEqual(self.output_writer.provider, "gmail")
         self.assertEqual(self.output_writer.output_dir, self.test_dir)
         self.assertEqual(self.output_writer.email_count, 0)
         self.assertIsNone(self.output_writer.file_handle)
@@ -50,15 +50,19 @@ class TestOutputWriter(unittest.TestCase):
 
         # Test output filename format
         self.assertIsNotNone(self.output_writer.output_file)
-        self.assertTrue(self.output_writer.output_file.startswith(os.path.join(self.test_dir, 'gmail-')))
-        self.assertTrue(self.output_writer.output_file.endswith('.txt'))
+        self.assertTrue(
+            self.output_writer.output_file.startswith(os.path.join(self.test_dir, "gmail-"))
+        )
+        self.assertTrue(self.output_writer.output_file.endswith(".txt"))
 
     def test_output_writer_with_icloud_provider(self):
         """Test OutputWriter with iCloud provider"""
-        icloud_output_writer = OutputWriter('icloud', self.test_dir)
+        icloud_output_writer = OutputWriter("icloud", self.test_dir)
 
-        self.assertEqual(icloud_output_writer.provider, 'icloud')
-        self.assertTrue(icloud_output_writer.output_file.startswith(os.path.join(self.test_dir, 'icloud-')))
+        self.assertEqual(icloud_output_writer.provider, "icloud")
+        self.assertTrue(
+            icloud_output_writer.output_file.startswith(os.path.join(self.test_dir, "icloud-"))
+        )
 
     def test_timestamped_filename_generation(self):
         """Test that timestamped filename follows correct format"""
@@ -66,17 +70,17 @@ class TestOutputWriter(unittest.TestCase):
         filename = os.path.basename(self.output_writer.output_file)
 
         # Should start with provider name
-        self.assertTrue(filename.startswith('gmail-'))
+        self.assertTrue(filename.startswith("gmail-"))
 
         # Should end with .txt
-        self.assertTrue(filename.endswith('.txt'))
+        self.assertTrue(filename.endswith(".txt"))
 
         # Extract timestamp part
-        timestamp_part = filename[len('gmail-'):-len('.txt')]
+        timestamp_part = filename[len("gmail-") : -len(".txt")]
 
         # Should be in format yyyyMMdd-HHmmss
         self.assertEqual(len(timestamp_part), 15)  # yyyyMMdd-HHmmss = 15 characters
-        self.assertEqual(timestamp_part[8], '-')  # Should have dash separator
+        self.assertEqual(timestamp_part[8], "-")  # Should have dash separator
 
         # Should be parseable as datetime
         try:
@@ -116,7 +120,7 @@ class TestOutputWriter(unittest.TestCase):
         self.output_writer.finalize_output()
 
         # Read and verify content
-        with open(self.output_writer.output_file, encoding='utf-8') as f:
+        with open(self.output_writer.output_file, encoding="utf-8") as f:
             written_content = f.read()
 
         # Should contain delimiter and content
@@ -139,7 +143,7 @@ class TestOutputWriter(unittest.TestCase):
         self.output_writer.finalize_output()
 
         # Read and verify content
-        with open(self.output_writer.output_file, encoding='utf-8') as f:
+        with open(self.output_writer.output_file, encoding="utf-8") as f:
             written_content = f.read()
 
         # Should contain specific email number
@@ -150,11 +154,7 @@ class TestOutputWriter(unittest.TestCase):
         """Test writing multiple emails"""
         self.output_writer.create_output_file()
 
-        emails = [
-            "First email content",
-            "Second email content",
-            "Third email content"
-        ]
+        emails = ["First email content", "Second email content", "Third email content"]
 
         # Write multiple emails
         for email_content in emails:
@@ -167,7 +167,7 @@ class TestOutputWriter(unittest.TestCase):
         self.output_writer.finalize_output()
 
         # Read and verify content
-        with open(self.output_writer.output_file, encoding='utf-8') as f:
+        with open(self.output_writer.output_file, encoding="utf-8") as f:
             written_content = f.read()
 
         # Should contain all emails with proper delimiters
@@ -191,11 +191,11 @@ class TestOutputWriter(unittest.TestCase):
         self.output_writer.finalize_output()
 
         # Read and verify content
-        with open(self.output_writer.output_file, encoding='utf-8') as f:
+        with open(self.output_writer.output_file, encoding="utf-8") as f:
             written_content = f.read()
 
         # Both should have proper line breaks and separation
-        lines = written_content.split('\n')
+        lines = written_content.split("\n")
 
         # Should have delimiters
         self.assertIn("=== EMAIL 1 ===", lines)
@@ -246,7 +246,7 @@ class TestOutputWriter(unittest.TestCase):
         self.output_writer.finalize_output()
 
         # Read back with UTF-8 encoding
-        with open(self.output_writer.output_file, encoding='utf-8') as f:
+        with open(self.output_writer.output_file, encoding="utf-8") as f:
             written_content = f.read()
 
         # Should contain the unicode content correctly
@@ -268,11 +268,11 @@ class TestOutputWriter(unittest.TestCase):
         invalid_path = "/invalid/read/only/path"
 
         with self.assertRaises(Exception) as context:
-            OutputWriter('gmail', invalid_path)
+            OutputWriter("gmail", invalid_path)
 
         self.assertIn("Failed to create output directory", str(context.exception))
 
-    @patch('builtins.open', side_effect=PermissionError("Permission denied"))
+    @patch("builtins.open", side_effect=PermissionError("Permission denied"))
     def test_error_handling_file_creation_failure(self, mock_open):
         """Test error handling when file creation fails"""
         with self.assertRaises(Exception) as context:
@@ -284,7 +284,7 @@ class TestOutputWriter(unittest.TestCase):
         """Test getting output filename"""
         filename = self.output_writer.get_output_filename()
         self.assertEqual(filename, self.output_writer.output_file)
-        self.assertTrue(filename.endswith('.txt'))
+        self.assertTrue(filename.endswith(".txt"))
 
     def test_get_email_count(self):
         """Test getting email count"""
@@ -303,5 +303,5 @@ class TestOutputWriter(unittest.TestCase):
         self.output_writer.finalize_output()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

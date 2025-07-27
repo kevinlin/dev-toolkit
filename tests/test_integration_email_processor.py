@@ -24,7 +24,7 @@ class TestEmailProcessorIntegration(unittest.TestCase):
     def setUp(self):
         """Set up test fixtures"""
         self.mock_imap_manager = MagicMock()
-        self.provider = 'gmail'  # Provider for CacheManager
+        self.provider = "gmail"  # Provider for CacheManager
         self.test_dir = tempfile.mkdtemp()  # Test directory for CacheManager
         self.processor = EmailProcessor(self.mock_imap_manager)
 
@@ -33,27 +33,31 @@ class TestEmailProcessorIntegration(unittest.TestCase):
         if os.path.exists(self.test_dir):
             shutil.rmtree(self.test_dir)
 
-    def _create_mock_email_message(self, uid: str, subject: str = "Test Subject",
-                                 body: str = "This is a test email with more than twenty words to pass validation. It contains meaningful content for testing purposes."):
+    def _create_mock_email_message(
+        self,
+        uid: str,
+        subject: str = "Test Subject",
+        body: str = "This is a test email with more than twenty words to pass validation. It contains meaningful content for testing purposes.",
+    ):
         """Create a mock email message for testing"""
         msg = email.message.EmailMessage()
-        msg['Subject'] = subject
-        msg['Date'] = 'Mon, 01 Jan 2024 12:00:00 +0000'
-        msg['From'] = 'test@example.com'
-        msg['To'] = 'recipient@example.com'
+        msg["Subject"] = subject
+        msg["Date"] = "Mon, 01 Jan 2024 12:00:00 +0000"
+        msg["From"] = "test@example.com"
+        msg["To"] = "recipient@example.com"
         msg.set_content(body)
         return msg
 
     def test_process_emails_integration(self):
         """Test process_emails method integration"""
         # Mock fetch_message_uids to return batches
-        batch1 = ['123', '456']
-        batch2 = ['789', '101']
+        batch1 = ["123", "456"]
+        batch2 = ["789", "101"]
         self.mock_imap_manager.fetch_message_uids.return_value = [batch1, batch2]
 
         # Mock _process_batch
-        with patch.object(self.processor, '_process_batch') as mock_process_batch:
-            with patch('builtins.print'):  # Suppress output
+        with patch.object(self.processor, "_process_batch") as mock_process_batch:
+            with patch("builtins.print"):  # Suppress output
                 result = self.processor.process_emails(batch_size=500, progress_interval=100)
 
                 # Should call _process_batch for each batch
@@ -74,9 +78,9 @@ class TestEmailProcessorIntegration(unittest.TestCase):
 
         # Valid message
         valid_msg = email.message.EmailMessage()
-        valid_msg['Subject'] = 'Project Discussion'
-        valid_msg['From'] = 'colleague@company.com'
-        valid_msg['Date'] = 'Mon, 15 Jan 2024 10:30:00 +0000'
+        valid_msg["Subject"] = "Project Discussion"
+        valid_msg["From"] = "colleague@company.com"
+        valid_msg["Date"] = "Mon, 15 Jan 2024 10:30:00 +0000"
         valid_msg.set_content(
             "Hi team, I wanted to discuss our upcoming project timeline and deliverables. "
             "We need to ensure that all components are properly tested before the release. "
@@ -87,27 +91,27 @@ class TestEmailProcessorIntegration(unittest.TestCase):
 
         # System-generated message
         system_msg = email.message.EmailMessage()
-        system_msg['Subject'] = 'Auto-Reply: Out of Office'
-        system_msg['From'] = 'user@company.com'
-        system_msg['Date'] = 'Mon, 15 Jan 2024 11:00:00 +0000'
+        system_msg["Subject"] = "Auto-Reply: Out of Office"
+        system_msg["From"] = "user@company.com"
+        system_msg["Date"] = "Mon, 15 Jan 2024 11:00:00 +0000"
         system_msg.set_content("I am currently out of office and will return on Monday.")
         messages.append(system_msg)
 
         # Short message (insufficient content)
         short_msg = email.message.EmailMessage()
-        short_msg['Subject'] = 'Quick Update'
-        short_msg['From'] = 'manager@company.com'
-        short_msg['Date'] = 'Mon, 15 Jan 2024 12:00:00 +0000'
+        short_msg["Subject"] = "Quick Update"
+        short_msg["From"] = "manager@company.com"
+        short_msg["Date"] = "Mon, 15 Jan 2024 12:00:00 +0000"
         short_msg.set_content("Thanks!")
         messages.append(short_msg)
 
         # Setup mocks for IMAP manager
-        uids = ['msg1', 'msg2', 'msg3']
+        uids = ["msg1", "msg2", "msg3"]
         self.mock_imap_manager.fetch_message_uids.return_value = [uids]
         self.mock_imap_manager.fetch_message.side_effect = messages
 
         # Process emails (minimal mocking - let ContentProcessor work naturally)
-        with patch('builtins.print'):  # Suppress output
+        with patch("builtins.print"):  # Suppress output
             stats = self.processor.process_emails()
 
         # Verify results
@@ -120,18 +124,18 @@ class TestEmailProcessorIntegration(unittest.TestCase):
         # Verify processed message details
         self.assertEqual(len(self.processor.processed_messages), 1)
         processed = self.processor.processed_messages[0]
-        self.assertEqual(processed['uid'], 'msg1')
-        self.assertEqual(processed['subject'], 'Project Discussion')
-        self.assertIn('project timeline', processed['content'])
-        self.assertGreater(processed['word_count'], 20)
+        self.assertEqual(processed["uid"], "msg1")
+        self.assertEqual(processed["subject"], "Project Discussion")
+        self.assertIn("project timeline", processed["content"])
+        self.assertGreater(processed["word_count"], 20)
 
     def test_html_email_processing_integration(self):
         """Test integration with HTML email processing"""
         # Create HTML email message
         html_msg = email.message.EmailMessage()
-        html_msg['Subject'] = 'Newsletter Update'
-        html_msg['From'] = 'newsletter@company.com'
-        html_msg['Date'] = 'Mon, 15 Jan 2024 14:00:00 +0000'
+        html_msg["Subject"] = "Newsletter Update"
+        html_msg["From"] = "newsletter@company.com"
+        html_msg["Date"] = "Mon, 15 Jan 2024 14:00:00 +0000"
 
         html_content = """
         <html>
@@ -149,14 +153,14 @@ class TestEmailProcessorIntegration(unittest.TestCase):
         </body>
         </html>
         """
-        html_msg.set_content(html_content, subtype='html')
+        html_msg.set_content(html_content, subtype="html")
 
         # Setup mocks
-        self.mock_imap_manager.fetch_message_uids.return_value = [['html_msg']]
+        self.mock_imap_manager.fetch_message_uids.return_value = [["html_msg"]]
         self.mock_imap_manager.fetch_message.return_value = html_msg
 
         # Process the HTML email
-        with patch('builtins.print'):
+        with patch("builtins.print"):
             stats = self.processor.process_emails()
 
         # Verify processing
@@ -164,23 +168,23 @@ class TestEmailProcessorIntegration(unittest.TestCase):
         self.assertEqual(len(self.processor.processed_messages), 1)
 
         processed = self.processor.processed_messages[0]
-        content = processed['content']
+        content = processed["content"]
 
         # Verify HTML was converted to text
-        self.assertNotIn('<html>', content)
-        self.assertNotIn('<body>', content)
-        self.assertNotIn('<h1>', content)
-        self.assertIn('Important Company Update', content)
-        self.assertIn('Enhanced security features', content)
-        self.assertGreater(processed['word_count'], 20)
+        self.assertNotIn("<html>", content)
+        self.assertNotIn("<body>", content)
+        self.assertNotIn("<h1>", content)
+        self.assertIn("Important Company Update", content)
+        self.assertIn("Enhanced security features", content)
+        self.assertGreater(processed["word_count"], 20)
 
     def test_multipart_email_processing_integration(self):
         """Test integration with multipart email processing"""
         # Create multipart email with both text and HTML parts
         multipart_msg = email.message.EmailMessage()
-        multipart_msg['Subject'] = 'Team Meeting Notes'
-        multipart_msg['From'] = 'organizer@company.com'
-        multipart_msg['Date'] = 'Mon, 15 Jan 2024 16:00:00 +0000'
+        multipart_msg["Subject"] = "Team Meeting Notes"
+        multipart_msg["From"] = "organizer@company.com"
+        multipart_msg["Date"] = "Mon, 15 Jan 2024 16:00:00 +0000"
 
         # Add plain text part
         text_content = """
@@ -215,14 +219,14 @@ class TestEmailProcessorIntegration(unittest.TestCase):
         </ol>
         </body></html>
         """
-        multipart_msg.add_alternative(html_content, subtype='html')
+        multipart_msg.add_alternative(html_content, subtype="html")
 
         # Setup mocks
-        self.mock_imap_manager.fetch_message_uids.return_value = [['multipart_msg']]
+        self.mock_imap_manager.fetch_message_uids.return_value = [["multipart_msg"]]
         self.mock_imap_manager.fetch_message.return_value = multipart_msg
 
         # Process the multipart email
-        with patch('builtins.print'):
+        with patch("builtins.print"):
             stats = self.processor.process_emails()
 
         # Verify processing
@@ -230,18 +234,18 @@ class TestEmailProcessorIntegration(unittest.TestCase):
         self.assertEqual(len(self.processor.processed_messages), 1)
 
         processed = self.processor.processed_messages[0]
-        content = processed['content']
+        content = processed["content"]
 
         # Should prefer plain text over HTML
-        self.assertIn('Meeting Notes - January 15, 2024', content)
-        self.assertIn('Attendees: John, Sarah, Mike, Lisa', content)
-        self.assertIn('Action Items:', content)
+        self.assertIn("Meeting Notes - January 15, 2024", content)
+        self.assertIn("Attendees: John, Sarah, Mike, Lisa", content)
+        self.assertIn("Action Items:", content)
 
         # Should not contain HTML tags
-        self.assertNotIn('<html>', content)
-        self.assertNotIn('<strong>', content)
+        self.assertNotIn("<html>", content)
+        self.assertNotIn("<strong>", content)
 
-        self.assertGreater(processed['word_count'], 20)
+        self.assertGreater(processed["word_count"], 20)
 
     def test_email_processing_with_content_deduplication(self):
         """Test that content-based deduplication works during email processing"""
@@ -253,19 +257,25 @@ class TestEmailProcessorIntegration(unittest.TestCase):
         identical_content = "This is an identical email body content for testing duplicate detection with enough words to pass validation. We need to ensure there are more than twenty words in this content so it will not be filtered out as short content. This should be sufficient for testing purposes."
 
         email1 = self._create_mock_email_message("uid1", "Subject 1", identical_content)
-        email2 = self._create_mock_email_message("uid2", "Subject 2", identical_content)  # Different UID, same content
-        email3 = self._create_mock_email_message("uid3", "Subject 3", "This is completely different content for testing purposes with sufficient words to ensure it passes validation. We need to make sure this content has more than twenty words so it will be processed correctly by the email processor.")
+        email2 = self._create_mock_email_message(
+            "uid2", "Subject 2", identical_content
+        )  # Different UID, same content
+        email3 = self._create_mock_email_message(
+            "uid3",
+            "Subject 3",
+            "This is completely different content for testing purposes with sufficient words to ensure it passes validation. We need to make sure this content has more than twenty words so it will be processed correctly by the email processor.",
+        )
 
         # Set up batch processing
-        test_batch = ['uid1', 'uid2', 'uid3']
+        test_batch = ["uid1", "uid2", "uid3"]
         self.mock_imap_manager.fetch_message_uids.return_value = [test_batch]
 
         def mock_fetch_message(uid):
-            if uid == 'uid1':
+            if uid == "uid1":
                 return email1
-            elif uid == 'uid2':
+            elif uid == "uid2":
                 return email2
-            elif uid == 'uid3':
+            elif uid == "uid3":
                 return email3
             return None
 
@@ -298,15 +308,15 @@ class TestEmailProcessorIntegration(unittest.TestCase):
         email2 = self._create_mock_email_message("uid2", "Subject 2", content2)
         email3 = self._create_mock_email_message("uid3", "Subject 3", content3)
 
-        test_batch = ['uid1', 'uid2', 'uid3']
+        test_batch = ["uid1", "uid2", "uid3"]
         self.mock_imap_manager.fetch_message_uids.return_value = [test_batch]
 
         def mock_fetch_message(uid):
-            if uid == 'uid1':
+            if uid == "uid1":
                 return email1
-            elif uid == 'uid2':
+            elif uid == "uid2":
                 return email2
-            elif uid == 'uid3':
+            elif uid == "uid3":
                 return email3
             return None
 
@@ -353,15 +363,15 @@ Date: Mon, 15 Jan 2024
         email2 = self._create_mock_email_message("uid2", "Subject 2", content2)
         email3 = self._create_mock_email_message("uid3", "Subject 3", content3)
 
-        test_batch = ['uid1', 'uid2', 'uid3']
+        test_batch = ["uid1", "uid2", "uid3"]
         self.mock_imap_manager.fetch_message_uids.return_value = [test_batch]
 
         def mock_fetch_message(uid):
-            if uid == 'uid1':
+            if uid == "uid1":
                 return email1
-            elif uid == 'uid2':
+            elif uid == "uid2":
                 return email2
-            elif uid == 'uid3':
+            elif uid == "uid3":
                 return email3
             return None
 
@@ -384,7 +394,7 @@ Date: Mon, 15 Jan 2024
         cache_manager = CacheManager(self.provider, self.test_dir)
 
         # Pre-populate cache with some UIDs and content hashes
-        cache_manager.mark_processed('uid1')  # UID-based duplicate
+        cache_manager.mark_processed("uid1")  # UID-based duplicate
         existing_content = "This content is already in cache for testing purposes with sufficient words for validation. We need to ensure there are more than twenty words in this content so it will not be filtered out as short content."
         # We'll add the content hash manually below
 
@@ -396,19 +406,29 @@ Date: Mon, 15 Jan 2024
         email_processor = EmailProcessor(self.mock_imap_manager, cache_manager)
 
         # Create test emails
-        email1 = self._create_mock_email_message("uid1", "Subject 1", "Some content for testing with enough words for validation. We need to ensure there are more than twenty words in this content so it will not be filtered out as short content.")  # UID duplicate
-        email2 = self._create_mock_email_message("uid2", "Subject 2", existing_content)  # Content duplicate
-        email3 = self._create_mock_email_message("uid3", "Subject 3", "Unique content for testing with enough words for validation. We need to ensure there are more than twenty words in this content so it will not be filtered out as short content.")  # Unique
+        email1 = self._create_mock_email_message(
+            "uid1",
+            "Subject 1",
+            "Some content for testing with enough words for validation. We need to ensure there are more than twenty words in this content so it will not be filtered out as short content.",
+        )  # UID duplicate
+        email2 = self._create_mock_email_message(
+            "uid2", "Subject 2", existing_content
+        )  # Content duplicate
+        email3 = self._create_mock_email_message(
+            "uid3",
+            "Subject 3",
+            "Unique content for testing with enough words for validation. We need to ensure there are more than twenty words in this content so it will not be filtered out as short content.",
+        )  # Unique
 
-        test_batch = ['uid1', 'uid2', 'uid3']
+        test_batch = ["uid1", "uid2", "uid3"]
         self.mock_imap_manager.fetch_message_uids.return_value = [test_batch]
 
         def mock_fetch_message(uid):
-            if uid == 'uid1':
+            if uid == "uid1":
                 return email1
-            elif uid == 'uid2':
+            elif uid == "uid2":
                 return email2
-            elif uid == 'uid3':
+            elif uid == "uid3":
                 return email3
             return None
 
@@ -425,10 +445,12 @@ Date: Mon, 15 Jan 2024
         self.assertEqual(stats.skipped_duplicate, 2)  # uid1 (UID) + uid2 (content)
 
         # Verify final cache state
-        self.assertTrue(cache_manager.is_processed('uid1'))
-        self.assertTrue(cache_manager.is_processed('uid3'))
-        self.assertFalse(cache_manager.is_processed('uid2'))  # Not marked as processed since skipped as content duplicate
+        self.assertTrue(cache_manager.is_processed("uid1"))
+        self.assertTrue(cache_manager.is_processed("uid3"))
+        self.assertFalse(
+            cache_manager.is_processed("uid2")
+        )  # Not marked as processed since skipped as content duplicate
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

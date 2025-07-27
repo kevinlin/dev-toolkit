@@ -12,7 +12,7 @@ import sys
 import unittest
 from unittest.mock import Mock, patch
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from email_exporter import EmailExporterConfig, IMAPConnectionManager
 
@@ -24,12 +24,12 @@ class TestIMAPTimeoutHandling(unittest.TestCase):
         """Set up test fixtures"""
         # Create a mock config
         self.mock_config = Mock(spec=EmailExporterConfig)
-        self.mock_config.imap_server = 'imap.test.com'
+        self.mock_config.imap_server = "imap.test.com"
         self.mock_config.port = 993
-        self.mock_config.email_address = 'test@test.com'
-        self.mock_config.app_password = 'testpassword'
-        self.mock_config.provider = 'test'
-        self.mock_config.sent_folder = 'Sent'
+        self.mock_config.email_address = "test@test.com"
+        self.mock_config.app_password = "testpassword"
+        self.mock_config.provider = "test"
+        self.mock_config.sent_folder = "Sent"
 
         self.imap_manager = IMAPConnectionManager(self.mock_config)
 
@@ -38,7 +38,7 @@ class TestIMAPTimeoutHandling(unittest.TestCase):
         self.assertEqual(self.imap_manager.fetch_timeout, 60)
         self.assertFalse(self.imap_manager.is_connected)
 
-    @patch('email_exporter.imaplib.IMAP4_SSL')
+    @patch("email_exporter.imaplib.IMAP4_SSL")
     def test_connection_with_timeout_setting(self, mock_imap_class):
         """Test that socket timeout is set during connection"""
         mock_connection = Mock()
@@ -52,7 +52,7 @@ class TestIMAPTimeoutHandling(unittest.TestCase):
         self.assertTrue(result)
         self.assertTrue(self.imap_manager.is_connected)
         mock_socket.settimeout.assert_called_once_with(60)
-        mock_connection.login.assert_called_once_with('test@test.com', 'testpassword')
+        mock_connection.login.assert_called_once_with("test@test.com", "testpassword")
 
     def test_fetch_message_uids_with_timeout_retry(self):
         """Test fetch_message_uids with timeout retry logic"""
@@ -64,11 +64,11 @@ class TestIMAPTimeoutHandling(unittest.TestCase):
         # Mock first call to raise TimeoutError, second to succeed
         mock_connection.uid.side_effect = [
             TimeoutError("Connection timeout"),
-            ('OK', [b'1 2 3 4 5'])
+            ("OK", [b"1 2 3 4 5"]),
         ]
 
-        with patch('builtins.print'):  # Suppress warning prints
-            with patch('time.sleep'):  # Speed up test
+        with patch("builtins.print"):  # Suppress warning prints
+            with patch("time.sleep"):  # Speed up test
                 batches = list(self.imap_manager.fetch_message_uids(batch_size=2))
 
         # Should retry once and then succeed
@@ -85,8 +85,8 @@ class TestIMAPTimeoutHandling(unittest.TestCase):
         # Mock all calls to raise TimeoutError
         mock_connection.uid.side_effect = TimeoutError("Connection timeout")
 
-        with patch('builtins.print'):  # Suppress error prints
-            with patch('time.sleep'):  # Speed up test
+        with patch("builtins.print"):  # Suppress error prints
+            with patch("time.sleep"):  # Speed up test
                 batches = list(self.imap_manager.fetch_message_uids(batch_size=2))
 
         # Should fail after max retries
@@ -102,19 +102,16 @@ class TestIMAPTimeoutHandling(unittest.TestCase):
 
         # Mock first call to raise TimeoutError, second to succeed
         # IMAP fetch returns: [(b'1 (RFC822 {size}', b'email content'), b')']
-        mock_email_data = [(b'1 (RFC822 {1000}', b'email content'), b')']
-        mock_connection.uid.side_effect = [
-            OSError("Connection reset"),
-            ('OK', mock_email_data)
-        ]
+        mock_email_data = [(b"1 (RFC822 {1000}", b"email content"), b")"]
+        mock_connection.uid.side_effect = [OSError("Connection reset"), ("OK", mock_email_data)]
 
-        with patch('builtins.print'):  # Suppress warning prints
-            with patch('time.sleep'):  # Speed up test
-                with patch('email.message_from_bytes') as mock_parse:
+        with patch("builtins.print"):  # Suppress warning prints
+            with patch("time.sleep"):  # Speed up test
+                with patch("email.message_from_bytes") as mock_parse:
                     mock_message = Mock()
                     mock_parse.return_value = mock_message
 
-                    result = self.imap_manager.fetch_message('123')
+                    result = self.imap_manager.fetch_message("123")
 
         # Should retry once and then succeed
         self.assertEqual(result, mock_message)
@@ -130,9 +127,9 @@ class TestIMAPTimeoutHandling(unittest.TestCase):
         # Mock all calls to raise TimeoutError
         mock_connection.uid.side_effect = TimeoutError("Connection timeout")
 
-        with patch('builtins.print'):  # Suppress error prints
-            with patch('time.sleep'):  # Speed up test
-                result = self.imap_manager.fetch_message('123')
+        with patch("builtins.print"):  # Suppress error prints
+            with patch("time.sleep"):  # Speed up test
+                result = self.imap_manager.fetch_message("123")
 
         # Should fail after max retries
         self.assertIsNone(result)
@@ -147,19 +144,19 @@ class TestIMAPTimeoutHandling(unittest.TestCase):
 
         # Mock first call to raise IMAP error, second to succeed
         # IMAP fetch returns: [(b'1 (RFC822 {size}', b'email content'), b')']
-        mock_email_data = [(b'1 (RFC822 {1000}', b'email content'), b')']
+        mock_email_data = [(b"1 (RFC822 {1000}", b"email content"), b")"]
         mock_connection.uid.side_effect = [
             imaplib.IMAP4.error("IMAP protocol error"),
-            ('OK', mock_email_data)
+            ("OK", mock_email_data),
         ]
 
-        with patch('builtins.print'):  # Suppress warning prints
-            with patch('time.sleep'):  # Speed up test
-                with patch('email.message_from_bytes') as mock_parse:
+        with patch("builtins.print"):  # Suppress warning prints
+            with patch("time.sleep"):  # Speed up test
+                with patch("email.message_from_bytes") as mock_parse:
                     mock_message = Mock()
                     mock_parse.return_value = mock_message
 
-                    result = self.imap_manager.fetch_message('123')
+                    result = self.imap_manager.fetch_message("123")
 
         # Should retry once and then succeed
         self.assertEqual(result, mock_message)
@@ -174,19 +171,16 @@ class TestIMAPTimeoutHandling(unittest.TestCase):
 
         # Mock first call to fail with 'NO' status, second to succeed
         # IMAP fetch returns: [(b'1 (RFC822 {size}', b'email content'), b')']
-        mock_email_data = [(b'1 (RFC822 {1000}', b'email content'), b')']
-        mock_connection.uid.side_effect = [
-            ('NO', ['Temporary failure']),
-            ('OK', mock_email_data)
-        ]
+        mock_email_data = [(b"1 (RFC822 {1000}", b"email content"), b")"]
+        mock_connection.uid.side_effect = [("NO", ["Temporary failure"]), ("OK", mock_email_data)]
 
-        with patch('builtins.print'):  # Suppress warning prints
-            with patch('time.sleep'):  # Speed up test
-                with patch('email.message_from_bytes') as mock_parse:
+        with patch("builtins.print"):  # Suppress warning prints
+            with patch("time.sleep"):  # Speed up test
+                with patch("email.message_from_bytes") as mock_parse:
                     mock_message = Mock()
                     mock_parse.return_value = mock_message
 
-                    result = self.imap_manager.fetch_message('123')
+                    result = self.imap_manager.fetch_message("123")
 
         # Should retry once and then succeed
         self.assertEqual(result, mock_message)
@@ -200,18 +194,15 @@ class TestIMAPTimeoutHandling(unittest.TestCase):
         self.imap_manager.is_connected = True
 
         # Mock first search to timeout, second to succeed
-        mock_connection.uid.side_effect = [
-            OSError("Network timeout"),
-            ('OK', [b'1 2 3'])
-        ]
+        mock_connection.uid.side_effect = [OSError("Network timeout"), ("OK", [b"1 2 3"])]
 
-        with patch('builtins.print'):  # Suppress warning prints
-            with patch('time.sleep'):  # Speed up test
+        with patch("builtins.print"):  # Suppress warning prints
+            with patch("time.sleep"):  # Speed up test
                 batches = list(self.imap_manager.fetch_message_uids())
 
         # Should succeed after retry
         self.assertEqual(len(batches), 1)
-        self.assertEqual(batches[0], ['1', '2', '3'])
+        self.assertEqual(batches[0], ["1", "2", "3"])
 
         # Should have called uid twice (original + 1 retry)
         self.assertEqual(mock_connection.uid.call_count, 2)
@@ -220,18 +211,18 @@ class TestIMAPTimeoutHandling(unittest.TestCase):
         """Test proper error handling when connection is not established"""
         # Don't set up connection (is_connected = False)
 
-        with patch('builtins.print') as mock_print:
+        with patch("builtins.print") as mock_print:
             # Test fetch_message_uids
             batches = list(self.imap_manager.fetch_message_uids())
             self.assertEqual(len(batches), 0)
 
             # Test fetch_message
-            result = self.imap_manager.fetch_message('123')
+            result = self.imap_manager.fetch_message("123")
             self.assertIsNone(result)
 
         # Should print appropriate error messages
         print_calls = [str(call) for call in mock_print.call_args_list]
-        self.assertTrue(any('Not connected to IMAP server' in call for call in print_calls))
+        self.assertTrue(any("Not connected to IMAP server" in call for call in print_calls))
 
     def test_retry_delay_timing(self):
         """Test that retry delays are properly implemented"""
@@ -243,13 +234,13 @@ class TestIMAPTimeoutHandling(unittest.TestCase):
         # Mock all calls to raise timeout
         mock_connection.uid.side_effect = TimeoutError("Connection timeout")
 
-        with patch('builtins.print'):  # Suppress error prints
-            with patch('time.sleep') as mock_sleep:
+        with patch("builtins.print"):  # Suppress error prints
+            with patch("time.sleep") as mock_sleep:
                 list(self.imap_manager.fetch_message_uids())
 
         # Should call sleep once with 2 seconds (between first and second attempt)
         mock_sleep.assert_called_once_with(2)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()
