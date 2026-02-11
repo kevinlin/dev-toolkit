@@ -258,9 +258,9 @@ class OutlookOAuth2Client:
 
         try:
             if method == "GET":
-                response = requests.get(url, headers=headers)
+                response = requests.get(url, headers=headers, timeout=30)
             elif method == "POST":
-                response = requests.post(url, headers=headers, json=data)
+                response = requests.post(url, headers=headers, json=data, timeout=30)
             else:
                 raise ValueError(f"Unsupported HTTP method: {method}")
 
@@ -269,9 +269,9 @@ class OutlookOAuth2Client:
                 if self.refresh_access_token():
                     headers["Authorization"] = f"Bearer {self.access_token}"
                     if method == "GET":
-                        response = requests.get(url, headers=headers)
+                        response = requests.get(url, headers=headers, timeout=30)
                     elif method == "POST":
-                        response = requests.post(url, headers=headers, json=data)
+                        response = requests.post(url, headers=headers, json=data, timeout=30)
                 else:
                     print("❌ Token refresh failed, re-authentication required")
                     return None
