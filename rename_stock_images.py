@@ -1,9 +1,9 @@
-import os
 import base64
 from pathlib import Path
+
+from openai import OpenAI
 from slugify import slugify
 from tqdm import tqdm
-from openai import OpenAI
 
 # ===== CONFIG =====
 FOLDER = Path("/Users/kevinlin/Downloads/Stock Image")
