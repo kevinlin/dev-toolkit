@@ -83,7 +83,7 @@ show-fixes = true
 known-first-party = ["src"]
 
 [tool.bandit]
-exclude_dirs = ["tests", ".venv", "venv"]
+exclude_dirs = ["tests", ".venv", "venv", ".history"]
 skips = ["B101"]  # Skip assert_used test since we allow asserts in tests
 
 [tool.bandit.assert_used]

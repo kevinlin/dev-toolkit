@@ -47,8 +47,8 @@ jobs:
     - name: Security scan with Bandit
       run: |
         echo "::group::Bandit Security Scan"
-        bandit -r . -f json -o bandit-report.json || true
-        bandit -r . --severity-level medium
+        bandit -r . -c pyproject.toml -f json -o bandit-report.json || true
+        bandit -r . -c pyproject.toml --severity-level medium
         echo "::endgroup::"
 
     - name: Dependency vulnerability scan
