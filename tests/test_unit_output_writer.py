@@ -295,7 +295,7 @@ class TestOutputWriter(unittest.TestCase):
 
         # Write some emails
         for i in range(5):
-            self.output_writer.write_content(f"Email {i+1}")
+            self.output_writer.write_content(f"Email {i + 1}")
 
         # Count should be 5
         self.assertEqual(self.output_writer.get_email_count(), 5)

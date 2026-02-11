@@ -13,29 +13,33 @@ MODEL = "gpt-5.2"
 
 client = OpenAI()
 
+
 def describe_image(image_path):
     with open(image_path, "rb") as f:
         b64 = base64.b64encode(f.read()).decode("utf-8")
 
     response = client.responses.create(
         model=MODEL,
-        input=[{
-            "role": "user",
-            "content": [
-                {
-                    "type": "input_text",
-                    "text": "Provide a short 4-8 word meaningful phrase describing this image. No punctuation. No quotes."
-                },
-                {
-                    "type": "input_image",
-                    "image_url": f"data:image/jpeg;base64,{b64}",
-                },
-            ],
-        }],
+        input=[
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "input_text",
+                        "text": "Provide a short 4-8 word meaningful phrase describing this image. No punctuation. No quotes.",
+                    },
+                    {
+                        "type": "input_image",
+                        "image_url": f"data:image/jpeg;base64,{b64}",
+                    },
+                ],
+            }
+        ],
         max_output_tokens=40,
     )
 
     return response.output_text.strip()
+
 
 def safe_rename(path, new_stem):
     new_stem = slugify(new_stem)[:MAX_LEN]
@@ -49,6 +53,7 @@ def safe_rename(path, new_stem):
     path.rename(new_path)
     return new_path.name
 
+
 def main():
     images = [p for p in FOLDER.iterdir() if p.suffix.lower() in [".jpg", ".jpeg", ".png"]]
 
@@ -61,6 +66,7 @@ def main():
             print(f"Renamed: {img.name} → {new_name}")
         except Exception as e:
             print(f"Skipped {img.name}: {e}")
+
 
 if __name__ == "__main__":
     main()

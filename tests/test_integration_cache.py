@@ -348,8 +348,8 @@ class TestCacheIntegration(unittest.TestCase):
         """Test EmailProcessor handles cache manager errors gracefully"""
         test_batch = ["uid1"]
         self.mock_imap_manager.fetch_message_uids.return_value = [test_batch]
-        self.mock_imap_manager.fetch_message.side_effect = (
-            lambda uid: self._create_mock_email_message(uid)
+        self.mock_imap_manager.fetch_message.side_effect = lambda uid: (
+            self._create_mock_email_message(uid)
         )
 
         # Mock cache save to raise an exception
