@@ -15,6 +15,10 @@ dependencies = [
     "html2text~=2020.1.16",
     "msal~=1.24.0",
     "requests~=2.31.0",
+    "openai>=2.2.0",
+    "pillow>=10.4.0",
+    "python-slugify>=8.0.4",
+    "tqdm>=4.67.3",
 ]
 
 [project.optional-dependencies]
